@@ -4,8 +4,13 @@
 
 DGA (**D**ifference-based **G**raph **A**ligner) is a vectorized sequence-to-graph alignment tool based on difference recurrence that could produce optimal alignment results. We first introduce a novel difference recurrence instead of the classical Smith-Waterman algorithm. By doing so, our algorithm can keep the number of bits required to store each cell score within 8 even when aligning long reads, and subsequently maintain the highest parallelism of vectorization. In addition, we employ an adaptive banded approach that significantly reduces the number of cells that require computation.
 
-![workflow of DGA](workflow.svg)
-<center>Fig: The work flow of DGA</center>
+<!-- ![workflow of DGA](workflow.svg) -->
+<p align="center">
+  <img src="workflow.svg" width="100%">
+  <br>
+  <em>Fig: Workflow of DGA.</em>
+</p>
+
 
 ## Code Origin and License Notice
 This project builds upon the open-source implementation of [PaSGAL](https://github.com/ParBLiSS/PaSGAL.git)
@@ -49,7 +54,7 @@ make -j4
 - E.coli genome (Strain:ATCC11775, ASM369716v2): https://gtdb.ecogenomic.org/genome?gid=GCF_003697165.2
 
 ### VCF files
-vcf files for GRCh38 in 1000 Genomes Project: https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20190312_biallelic_SNV_and_INDEL/
+VCF files for GRCh38 in 1000 Genomes Project: https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20190312_biallelic_SNV_and_INDEL/
 
 ### Reference graph
 The reference graph is constructed using [vg](https://anaconda.org/bioconda/vg) from the reference genome and VCF files.
