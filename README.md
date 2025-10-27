@@ -18,12 +18,12 @@ DGA (**D**ifference-based **G**raph **A**ligner) is a vectorized sequence-to-gra
 <!-- DGA requires the following environment and libraries to build and run properly: -->
 
 #### Library dependencies
-- Google Protobuf library (can also be installed via [conda](https://anaconda.org/anaconda/protobuf))
+- [Google Protobuf](https://github.com/protocolbuffers/protobuf.git) library (can also be installed via [conda](https://anaconda.org/anaconda/protobuf))
 
 
 #### Compiler recommendation
 - cmake (version ≥ 3.1)
-- A C++17-compatible compiler, such as GNU g++ (version 7+) or Intel oneAPI icpx (version 2022.0 or later). 
+- A C++17-compatible compiler, such as GNU g++ (version 7+) or Intel oneAPI [icpx](https://www.intel.cn/content/www/cn/zh/developer/tools/oneapi/dpc-compiler-download.html) (version 2022.0 or later). 
 
 We recommend using the Intel oneAPI C++ compiler (icpx) for compilation, as it provides better optimization for Intel SIMD instruction sets.
 
