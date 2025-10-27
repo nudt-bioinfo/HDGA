@@ -234,11 +234,11 @@
 		</g>
 		<g id="shape56-66" v:mID="56" v:groupContext="shape" transform="translate(790.163,-1843.88)">
 			<title>工作表.56</title>
-			<desc>readSet</desc>
+			<desc>Read set</desc>
 			<v:textBlock v:margins="rect(4,4,4,4)" v:tabSpace="42.5197"/>
 			<v:textRect cx="80.5197" cy="1961.3" width="161.04" height="20"/>
 			<rect x="0" y="1951.3" width="161.039" height="20" class="st5"/>
-			<text x="32.34" y="1970.3" class="st6" v:langID="2052"><v:paragraph v:horizAlign="1"/><v:tabList/>readSet</text>		</g>
+			<text x="26.94" y="1970.3" class="st6" v:langID="2052"><v:paragraph v:horizAlign="1"/><v:tabList/>Read set</text>		</g>
 		<g id="shape57-69" v:mID="57" v:groupContext="shape" transform="translate(1212.49,-1759.92)">
 			<title>椭圆形.40</title>
 			<v:userDefs>
@@ -4222,7 +4222,7 @@
 		</g>
 		<g id="shape657-1232" v:mID="657" v:groupContext="shape" transform="translate(1151.58,-1095.68)">
 			<title>矩形.930</title>
-			<desc>Approach of vectorization: inter-task parallelism Formula:dif...</desc>
+			<desc>Approach of vectorization: inter-task parallelism Formula: di...</desc>
 			<v:userDefs>
 				<v:ud v:nameU="visVersion" v:val="VT0(15):26"/>
 			</v:userDefs>
@@ -4231,10 +4231,10 @@
 			<rect x="0" y="1751.61" width="411.024" height="219.685" class="st25"/>
 			<text x="4" y="1782.26" class="st23" v:langID="2052"><v:paragraph/><v:tabList/>Approach of vectorization:<v:lf/><tspan
 						x="4" dy="1.2em" class="st26">inter</tspan><tspan class="st26">-</tspan><tspan class="st26">task parallelism<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Formula:</tspan><tspan class="st26">difference recurrence<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Feature:</tspan><tspan class="st26">fixed vector width of 32 </tspan><tspan
+						x="4" dy="1.2em" class="st7">Formula: </tspan><tspan class="st26">difference recurrence<v:newlineChar/></tspan><tspan
+						x="4" dy="1.2em" class="st7">Feature: </tspan><tspan class="st26">fixed vector width of 32 </tspan><tspan
 						x="4" dy="1.2em" class="st26">elements(using AVX2), regardless of read </tspan><tspan x="4" dy="1.2em"
-						class="st26">length<v:newlineChar/></tspan><tspan x="4" dy="1.2em" class="st7">Output:</tspan><tspan
+						class="st26">length<v:newlineChar/></tspan><tspan x="4" dy="1.2em" class="st7">Output: </tspan><tspan
 						class="st26">ending alignment position</tspan></text>		</g>
 		<g id="shape659-1246" v:mID="659" v:groupContext="shape" transform="translate(902.695,-1377.8)">
 			<title>工作表.659</title>
@@ -4312,7 +4312,7 @@
 			<text x="29.57" y="1968.5" class="st32" v:langID="2052"><v:paragraph v:horizAlign="1"/><v:tabList/>batchSize</text>		</g>
 		<g id="shape669-1276" v:mID="669" v:groupContext="shape" transform="translate(1151.58,-566.087)">
 			<title>矩形.1198</title>
-			<desc>Approach of vectorization: intra-task parallelism Formula:bas...</desc>
+			<desc>Approach of vectorization: intra-task parallelism Formula: ba...</desc>
 			<v:userDefs>
 				<v:ud v:nameU="visVersion" v:val="VT0(15):26"/>
 			</v:userDefs>
@@ -4321,10 +4321,10 @@
 			<rect x="0" y="1772.87" width="411.024" height="198.425" class="st33"/>
 			<text x="4" y="1807.29" class="st23" v:langID="2052"><v:paragraph/><v:tabList/>Approach of vectorization:<v:lf/><tspan
 						x="4" dy="1.2em" class="st26">intra</tspan><tspan class="st26">-</tspan><tspan class="st26">task parallelism<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Formula:</tspan><tspan class="st26">basic recurrence relation<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Feature:</tspan><tspan class="st26">only fill cells within the band </tspan><tspan
+						x="4" dy="1.2em" class="st7">Formula: </tspan><tspan class="st26">basic recurrence relation<v:newlineChar/></tspan><tspan
+						x="4" dy="1.2em" class="st7">Feature: </tspan><tspan class="st26">only fill cells within the band </tspan><tspan
 						x="4" dy="1.2em" class="st26">using SIMD instructions<v:newlineChar/></tspan><tspan x="4" dy="1.2em"
-						class="st7">Output:</tspan><tspan class="st26">starting alignment position </tspan> </text>		</g>
+						class="st7">Output: </tspan><tspan class="st26">starting alignment position </tspan> </text>		</g>
 		<g id="shape670-1289" v:mID="670" v:groupContext="shape" transform="translate(82.919,-942.937)">
 			<title>工作表.670</title>
 			<desc>(c) Phase3: Backward computing</desc>
@@ -5470,7 +5470,7 @@
 			<text x="69.92" y="1968.5" class="st32" v:langID="2052"><v:paragraph v:horizAlign="1"/><v:tabList/>1</text>		</g>
 		<g id="shape1587-1640" v:mID="1587" v:groupContext="shape" transform="translate(1151.58,-72.2916)">
 			<title>矩形.1587</title>
-			<desc>Approach of vectorization: intra-task parallelism Formula:bas...</desc>
+			<desc>Approach of vectorization: intra-task parallelism Formula: ba...</desc>
 			<v:userDefs>
 				<v:ud v:nameU="visVersion" v:val="VT0(15):26"/>
 			</v:userDefs>
@@ -5479,12 +5479,12 @@
 			<rect x="0" y="1772.87" width="411.024" height="198.425" class="st33"/>
 			<text x="4" y="1792.89" class="st23" v:langID="2052"><v:paragraph/><v:tabList/>Approach of vectorization:<v:lf/><tspan
 						x="4" dy="1.2em" class="st26">intra</tspan><tspan class="st26">-</tspan><tspan class="st26">task parallelism<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Formula:</tspan><tspan class="st26">basic recurrence relation<v:newlineChar/></tspan><tspan
-						x="4" dy="1.2em" class="st7">Feature:</tspan><tspan class="st26">compute from the ending </tspan><tspan
+						x="4" dy="1.2em" class="st7">Formula: </tspan><tspan class="st26">basic recurrence relation<v:newlineChar/></tspan><tspan
+						x="4" dy="1.2em" class="st7">Feature: </tspan><tspan class="st26">compute from the ending </tspan><tspan
 						x="4" dy="1.2em" class="st26">position to the starting position<v:newlineChar/></tspan><tspan x="4"
-						dy="1.2em" class="st7">Output:</tspan><tspan class="st26">base</tspan><tspan class="st26">-</tspan><tspan
-						class="st26">to</tspan><tspan class="st26">-</tspan><tspan class="st26">base alignment in CIGAR </tspan><tspan
-						x="4" dy="1.2em" class="st26">format  </tspan>  </text>		</g>
+						dy="1.2em" class="st7">Output: </tspan><tspan class="st26">base</tspan><tspan class="st26">-</tspan><tspan
+						class="st26">to</tspan><tspan class="st26">-</tspan><tspan class="st26">base alignment in </tspan><tspan
+						x="4" dy="1.2em" class="st26">CIGAR format  </tspan>  </text>		</g>
 		<g id="shape1588-1658" v:mID="1588" v:groupContext="shape" transform="translate(82.919,-437.11)">
 			<title>工作表.1588</title>
 			<desc>(d) Phase 4: Traceback</desc>
@@ -7491,7 +7491,7 @@
 			<rect x="0" y="1863.58" width="25.5118" height="107.717" rx="5.66929" ry="5.66929" class="st19"/>
 		</g>
 		<g id="shape2745-2237" v:mID="2745" v:groupContext="shape" transform="translate(650.203,-72.2915)">
-			<title>正方形.2745</title>
+			<title>正方形.658</title>
 			<v:userDefs>
 				<v:ud v:nameU="visVersion" v:val="VT0(15):26"/>
 			</v:userDefs>
