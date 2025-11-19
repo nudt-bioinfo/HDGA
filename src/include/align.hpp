@@ -17,12 +17,11 @@
 #include "base_types.hpp"
 #include "utils.hpp"
 
-#if defined(DGA_ENABLE_AVX512) || defined(DGA_ENABLE_AVX2)
 #include "align_vectorized_difference.hpp"
 #include "align_vectorized_banded.hpp"
+#include "align_nonbanded.hpp"
 #include <fstream>
 #include <sstream>
-#endif
 
 // External includes
 #include "kseq/kseq.h"
@@ -33,471 +32,6 @@ KSEQ_INIT(gzFile, gzread)
 
 namespace dga
 {
-    /**
-     * @brief                         execute first phase of alignment i.e. compute DP and
-     *                                find locations of the best alignment of each read
-     * @param[in]   readSet           vector of input query sequences to align
-     * @param[in]   graph
-     * @param[in]   parameters        input parameters
-     * @param[out]  bestScoreVector   vector to keep value and location of best scores,
-     *                                vector size is same as count of the reads
-     * @note                          reverse complement of the read is not handled here
-     */
-    void alignToDAGLocal_Phase1_scalar(const std::vector<std::string> &readSet,
-                                       const CSR_char_container &graph,
-                                       const Parameters &parameters,
-                                       std::vector<BestScoreInfo> &bestScoreVector)
-    {
-        assert(bestScoreVector.size() == readSet.size());
-
-#ifdef VTUNE_SUPPORT
-        __itt_resume();
-#endif
-
-        auto tick1 = __rdtsc();
-
-#pragma omp parallel
-        {
-
-            // initialize matrix of size 2 x width, init with zero
-            // we will keep re-using rows to keep memory-usage low
-            std::vector<std::vector<int32_t>> matrix(2, std::vector<int32_t>(graph.numVertices, 0));
-
-#pragma omp for schedule(dynamic)
-            for (size_t readno = 0; readno < readSet.size(); readno++)
-            {
-                // reset buffer
-                std::fill(matrix[1].begin(), matrix[1].end(), 0);
-
-                auto readLength = readSet[readno].length();
-
-                int32_t bestScore = 0;
-                int32_t bestRow = 0, bestCol = 0;
-
-                // iterate over characters in read
-                for (int32_t i = 0; i < readLength; i++)
-                {
-                    // iterate over characters in reference graph
-                    for (int32_t j = 0; j < graph.numVertices; j++)
-                    {
-                        // current reference character
-                        char curChar = graph.vertex_label[j];
-
-                        int32_t currentMax = 0;
-
-                        // see if query and ref. character match
-                        int32_t matchScore = curChar == readSet[readno][i] ? parameters.match : -1 * parameters.mismatch;
-
-                        // match-mismatch edit
-                        currentMax = dga_max(currentMax, matchScore); // local alignment can also start with a match at this char
-
-                        for (auto k = graph.offsets_in[j]; k < graph.offsets_in[j + 1]; k++)
-                        {
-                            // paths with match mismatch edit
-                            currentMax = dga_max(currentMax, matrix[(i - 1) & 1][graph.adjcny_in[k]] + matchScore);
-                            //'& 1' is same as doing modulo 2
-
-                            // paths with deletion edit
-                            currentMax = dga_max(currentMax, matrix[i & 1][graph.adjcny_in[k]] - parameters.del);
-                        }
-
-                        // insertion edit
-                        currentMax = dga_max(currentMax, matrix[(i - 1) & 1][j] - parameters.ins);
-
-                        matrix[i & 1][j] = currentMax;
-
-                        bestScore = dga_max(bestScore, currentMax);
-
-                        // Update best score observed till now
-                        if (bestScore == currentMax)
-                        {
-                            bestScore = currentMax;
-                            bestCol = j;
-                            bestRow = i;
-                        }
-                    } // end of row computation
-                } // end of DP
-
-                bestScoreVector[readno].score = bestScore;
-                bestScoreVector[readno].refColumnEnd = bestCol;
-                bestScoreVector[readno].qryRowEnd = bestRow;
-
-            } // all reads done
-        } // end of omp parallel
-
-        auto tick2 = __rdtsc();
-
-        std::cout << "TIMER, dga::alignToDAGLocal_Phase1_scalar, CPU cycles spent in phase 1 = " << tick2 - tick1
-                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
-
-#ifdef VTUNE_SUPPORT
-        __itt_pause();
-#endif
-    }
-
-    /**
-     * @brief                         execute first phase of alignment in reverse direction (right to left)
-     *                                i.e. compute reverse DP so as to find
-     *                                find begin location of the best alignment of each read
-     * @param[in]   readSet           vector of input query sequences to align
-     * @param[in]   graph
-     * @param[in]   parameters        input parameters
-     * @param[out]  bestScoreVector   vector to keep value and location of best scores,
-     *                                vector size is same as count of the reads
-     * @note                          reverse complement of the read is not handled here
-     */
-    void alignToDAGLocal_Phase1_rev_scalar(const std::vector<std::string> &readSet,
-                                           const CSR_char_container &graph,
-                                           const Parameters &parameters,
-                                           std::vector<BestScoreInfo> &bestScoreVector)
-    {
-        assert(bestScoreVector.size() == readSet.size());
-
-#ifdef VTUNE_SUPPORT
-        __itt_resume();
-#endif
-
-        auto tick1 = __rdtsc();
-
-#pragma omp parallel
-        {
-
-            // initialize matrix of size 2 x width, init with zero
-            // we will keep re-using rows to keep memory-usage low
-            std::vector<std::vector<int32_t>> matrix(2, std::vector<int32_t>(graph.numVertices, 0));
-
-#pragma omp for schedule(dynamic)
-            for (size_t readno = 0; readno < readSet.size(); readno++)
-            {
-                // reset buffer
-                std::fill(matrix[1].begin(), matrix[1].end(), 0);
-
-                auto readLength = readSet[readno].length();
-
-                int32_t bestScore = 0;
-                int32_t bestRow = 0, bestCol = 0;
-
-                // iterate over characters in read
-                for (int32_t i = 0; i < readLength; i++)
-                {
-                    // iterate over characters in reference graph
-                    for (int32_t j = graph.numVertices - 1; j >= 0; j--)
-                    {
-                        // current reference character
-                        char curChar = graph.vertex_label[j];
-
-                        int32_t currentMax = 0;
-
-                        // see if query and ref. character match
-                        int32_t matchScore = curChar == readSet[readno][i] ? parameters.match : -1 * parameters.mismatch;
-
-                        // match-mismatch edit
-                        currentMax = dga_max(currentMax, matchScore); // local alignment can also start with a match at this char
-
-                        for (auto k = graph.offsets_out[j]; k < graph.offsets_out[j + 1]; k++)
-                        {
-                            // paths with match mismatch edit
-                            currentMax = dga_max(currentMax, matrix[(i - 1) & 1][graph.adjcny_out[k]] + matchScore);
-                            //'& 1' is same as doing modulo 2
-
-                            // paths with deletion edit
-                            currentMax = dga_max(currentMax, matrix[i & 1][graph.adjcny_out[k]] - parameters.del);
-                        }
-
-                        // insertion edit
-                        currentMax = dga_max(currentMax, matrix[(i - 1) & 1][j] - parameters.ins);
-
-                        matrix[i & 1][j] = currentMax;
-
-                        bestScore = dga_max(bestScore, currentMax);
-
-                        // Update best score observed till now
-                        if (bestScore == currentMax)
-                        {
-                            bestScore = currentMax;
-                            bestCol = j;
-                            bestRow = readLength - 1 - i;
-                        }
-
-                        // special handling of the cell where optimal alignment had ended during forward DP
-                        if (j == bestScoreVector[readno].refColumnEnd && (readLength - 1 - i) == bestScoreVector[readno].qryRowEnd)
-                        {
-                            // local alignment needs to end with a match
-                            assert(currentMax == parameters.match);
-
-                            // add one so that the other end of the optimal alignment can be located without ambuiguity
-                            matrix[i & 1][j] = parameters.match + 1;
-                        }
-                    } // end of row computation
-                } // end of DP
-
-                assert(bestScoreVector[readno].score == bestScore - 1); // offset by 1
-                bestScoreVector[readno].refColumnStart = bestCol;
-                bestScoreVector[readno].qryRowStart = bestRow;
-
-            } // all reads done
-        } // end of omp parallel
-
-        auto tick2 = __rdtsc();
-
-        std::cout << "TIMER, dga::alignToDAGLocal_Phase1_rev_scalar, CPU cycles spent in phase 1-R = " << tick2 - tick1
-                  << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
-
-#ifdef VTUNE_SUPPORT
-        __itt_pause();
-#endif
-    }
-
-    /**
-     * @brief                         execute second phase of alignment i.e. compute cigar
-     * @param[in]   readSet
-     * @param[in]   graph
-     * @param[in]   parameters        input parameters
-     * @param[in]   bestScoreVector   best score and alignment location for each read
-     * @note                          we assume that query sequences are oriented properly
-     *                                after executing the alignment phase 1
-     */
-    void alignToDAGLocal_Phase2(const std::vector<std::string> &readSet,
-                                const CSR_char_container &graph,
-                                const Parameters &parameters,
-                                std::vector<BestScoreInfo> &bestScoreVector)
-    {
-        assert(bestScoreVector.size() == readSet.size());
-
-        std::vector<double> threadTimings(parameters.threads, 0);
-
-#pragma omp parallel
-        {
-            threadTimings[omp_get_thread_num()] = omp_get_wtime();
-
-#pragma omp for schedule(dynamic) nowait
-            for (size_t readno = 0; readno < readSet.size(); readno++)
-            {
-                // for time profiling within phase 2
-                uint64_t time_p2_1, time_p2_2;
-
-                // read length
-                auto readLength = readSet[readno].length();
-
-                //
-                // PHASE 2.1 : RECOMPUTE DP MATRIX WITH TRACEBACK INFORMATION
-                // recomputation is done within selected block of DP matrix
-                //
-
-                // width of score matrix that we need in memory
-                std::size_t reducedWidth = bestScoreVector[readno].refColumnEnd - bestScoreVector[readno].refColumnStart + 1;
-
-                // for new beginning column
-                std::size_t j0 = bestScoreVector[readno].refColumnStart;
-
-                // height of scoring matrix for re-computation
-                std::size_t reducedHeight = bestScoreVector[readno].qryRowEnd - bestScoreVector[readno].qryRowStart + 1;
-
-                // for new beginning row
-                std::size_t i0 = bestScoreVector[readno].qryRowStart;
-
-                // scores in the last row
-                std::vector<int32_t> finalRow(reducedWidth, 0);
-
-                // complete score matrix of size height x width to allow traceback
-                // Note: to optimize storge, we only store vertical difference; absolute values of
-                //       which is bounded by gap penalty
-#ifdef DEBUG
-                std::cout << "INFO, dga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", memory requested= " << reducedWidth * reducedHeight << " bytes" << std::endl;
-#endif
-
-                std::vector<std::vector<int8_t>> completeMatrixLog(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
-                std::vector<std::vector<int8_t>> Log(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
-
-                {
-                    auto tick1 = __rdtsc();
-
-                    // scoring matrix of size 2 x width, init with zero
-                    std::vector<std::vector<int32_t>> matrix(2, std::vector<int32_t>(reducedWidth, 0));
-
-                    // iterate over characters in read
-                    for (std::size_t i = 0; i < reducedHeight; i++)
-                    {
-                        // iterate over characters in reference graph
-                        for (std::size_t j = 0; j < reducedWidth; j++)
-                        {
-                            // current reference character
-                            char curChar = graph.vertex_label[j + j0];
-
-                            // insertion edit
-                            int32_t fromInsertion = matrix[(i - 1) & 1][j] - parameters.ins;
-                            //'& 1' is same as doing modulo 2
-
-                            // match-mismatch edit
-                            int32_t matchScore = curChar == readSet[readno][i + i0] ? parameters.match : -1 * parameters.mismatch;
-                            int32_t fromMatch = matchScore; // also handles the case when in-degree is zero
-
-                            // deletion edit
-                            int32_t fromDeletion = -1;
-
-                            for (auto k = graph.offsets_in[j + j0]; k < graph.offsets_in[j + j0 + 1]; k++)
-                            {
-                                // ignore edges outside the range
-                                if (graph.adjcny_in[k] >= j0)
-                                {
-                                    fromMatch = dga_max(fromMatch, matrix[(i - 1) & 1][graph.adjcny_in[k] - j0] + matchScore);
-                                    fromDeletion = dga_max(fromDeletion, matrix[i & 1][graph.adjcny_in[k] - j0] - parameters.del);
-                                }
-                            }
-
-                            // evaluate current score
-                            matrix[i & 1][j] = dga_max(dga_max(fromInsertion, fromMatch), dga_max(fromDeletion, 0));
-
-                            // save vertical difference of scores, used later for backtracking
-                            completeMatrixLog[i][j] = matrix[i & 1][j] - matrix[(i - 1) & 1][j];
-                        }
-
-                        // Save last row
-                        if (i == reducedHeight - 1)
-                            finalRow = matrix[i & 1];
-                    }
-
-                    int32_t bestScoreReComputed = *std::max_element(finalRow.begin(), finalRow.end());
-
-                    // the recomputed score and its location should match our original calculation
-                    assert(bestScoreReComputed == bestScoreVector[readno].score);
-                    assert(bestScoreReComputed == finalRow[bestScoreVector[readno].refColumnEnd - j0]);
-
-                    auto tick2 = __rdtsc();
-                    time_p2_1 = tick2 - tick1;
-                }
-
-                //
-                // PHASE 2.2 : COMPUTE CIGAR
-                //
-
-                std::string cigar;
-
-                {
-                    auto tick1 = __rdtsc();
-
-                    std::vector<int32_t> currentRowScores = finalRow;
-                    std::vector<int32_t> aboveRowScores(reducedWidth);
-
-                    int col = reducedWidth - 1;
-                    int row = reducedHeight - 1;
-
-                    while (col >= 0 && row >= 0)
-                    {
-                        Log[row][col] = 1;
-
-                        if (currentRowScores[col] <= 0)
-                            break;
-
-                        // retrieve score values from vertical score differences
-                        for (std::size_t i = 0; i < reducedWidth; i++)
-                            aboveRowScores[i] = currentRowScores[i] - completeMatrixLog[row][i];
-
-                        // current reference character
-                        char curChar = graph.vertex_label[col + j0];
-
-                        // insertion edit
-                        int32_t fromInsertion = aboveRowScores[col] - parameters.ins;
-
-                        // match-mismatch edit
-                        int32_t matchScore = curChar == readSet[readno][row + i0] ? parameters.match : -1 * parameters.mismatch;
-
-                        int32_t fromMatch = matchScore; // also handles the case when in-degree is zero
-                        std::size_t fromMatchPos = col;
-
-                        // deletion edit
-                        int32_t fromDeletion = -1;
-                        std::size_t fromDeletionPos;
-
-                        for (auto k = graph.offsets_in[col + j0]; k < graph.offsets_in[col + j0 + 1]; k++)
-                        {
-                            if (graph.adjcny_in[k] >= j0)
-                            {
-                                auto fromCol = graph.adjcny_in[k] - j0;
-
-                                if (fromMatch < aboveRowScores[fromCol] + matchScore)
-                                {
-                                    fromMatch = aboveRowScores[fromCol] + matchScore;
-                                    fromMatchPos = fromCol;
-                                }
-
-                                if (fromDeletion < currentRowScores[fromCol] - parameters.del)
-                                {
-                                    fromDeletion = currentRowScores[fromCol] - parameters.del;
-                                    fromDeletionPos = fromCol;
-                                }
-                            }
-                        }
-
-                        // evaluate recurrence
-                        {
-                            if (currentRowScores[col] == fromMatch)
-                            {
-                                if (matchScore == parameters.match)
-                                    cigar.push_back('=');
-                                else
-                                    cigar.push_back('X');
-
-                                // if alignment starts from this column, stop
-                                if (fromMatchPos == col)
-                                    break;
-
-                                // shift to preceeding column
-                                col = fromMatchPos;
-
-                                // shift to above row
-                                row--;
-                                currentRowScores = aboveRowScores;
-                            }
-                            else if (currentRowScores[col] == fromDeletion)
-                            {
-                                cigar.push_back('D');
-
-                                // shift to preceeding column
-                                col = fromDeletionPos;
-                            }
-                            else
-                            {
-                                assert(currentRowScores[col] == fromInsertion);
-
-                                cigar.push_back('I');
-
-                                // shift to above row
-                                row--;
-                                currentRowScores = aboveRowScores;
-                            }
-                        }
-                    }
-
-                    // string reverse
-                    std::reverse(cigar.begin(), cigar.end());
-
-                    // shorten the cigar string
-                    dga::seqUtils::cigarCompact(cigar);
-
-                    // validate if cigar yields best score
-                    assert(dga::seqUtils::cigarScore(cigar, parameters) == bestScoreVector[readno].score);
-
-                    bestScoreVector[readno].cigar = cigar;
-
-                    auto tick2 = __rdtsc();
-                    time_p2_2 = tick2 - tick1;
-                }
-
-#ifdef DEBUG
-                std::cout << "INFO, dga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
-                std::cout << "INFO, dga::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
-                std::cout << "TIMER, dga::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 * 1.0 / ASSUMED_CPU_FREQ << ", phase 2.2 = " << time_p2_2 * 1.0 / ASSUMED_CPU_FREQ << "\n";
-                // std::cout.flush();
-#endif
-            }
-
-            threadTimings[omp_get_thread_num()] = omp_get_wtime() - threadTimings[omp_get_thread_num()];
-        }
-
-        std::cout << "TIMER, dga::alignToDAGLocal_Phase2, individual thread timings (s) : " << printStats(threadTimings) << "\n";
-    }
-
     /**
      * @brief                               local alignment routine
      * @param[in]   readSet
@@ -519,9 +53,7 @@ namespace dga
         assert(readSet.size() > 0);
         assert(outputBestScoreVector.empty());
 
-        //
-        // Phase 1: forward computing [get ending locations of optimal local alignments]
-        //
+        /* [Phase1] forward computing: get best score values and ending locations */
         {
             auto tick1 = __rdtsc();
 
@@ -543,8 +75,6 @@ namespace dga
             assert(readSet_P1.size() == 2 * readSet.size());
 
             // align read to ref.
-#if defined(DGA_ENABLE_AVX512) || defined(DGA_ENABLE_AVX2)
-
             // there would be few padded characters at the end of qry seq
             // take that into account when computing max. read length
             auto blockHeight = Phase1_Vectorized<SimdInst<int8_t>>::blockHeight;
@@ -553,26 +83,23 @@ namespace dga
             // decide precision by looking at maximum score possible
             if (maxReadLength * parameters.match <= INT8_MAX)
             {
-                Phase1_Vectorized<SimdInst<int8_t>> obj(readSet_P1, graph, parameters);
-                obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+                Phase1_Vectorized<SimdInst<int8_t>> aligner_Phase1(readSet_P1, graph, parameters);
+                aligner_Phase1.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
             }
             else if (maxReadLength * parameters.match <= INT16_MAX)
             {
-                Phase1_Vectorized<SimdInst<int16_t>> obj(readSet_P1, graph, parameters);
-                obj.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
+                Phase1_Vectorized<SimdInst<int16_t>> aligner_Phase1(readSet_P1, graph, parameters);
+                aligner_Phase1.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
             }
             // when INT32 is needed, use difference recurrence relations
             else
             {
-                Phase1_Vectorized_Difference<SimdInst<int8_t>> obj(readSet_P1, graph, parameters);
-                obj.alignToDAGLocal_Phase1_vectorized_difference_wrapper(bestScoreVector_P1);
+                Phase1_Vectorized_Difference<SimdInst<int8_t>> aligner_Phase1(readSet_P1, graph, parameters);
+                aligner_Phase1.alignToDAGLocal_Phase1_vectorized_difference_wrapper(bestScoreVector_P1);
             }
-#else
-            alignToDAGLocal_Phase1_scalar(readSet_P1, graph, parameters, bestScoreVector_P1);
-#endif
 
             auto tick2 = __rdtsc();
-            std::cout << "TIMER, dga::alignToDAG, CPU cycles spent in phase 1  = " << tick2 - tick1
+            std::cout << "TIMER, dga::alignToDAGLocal, CPU cycles spent in [Phase1] forward computing = " << tick2 - tick1
                       << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
         }
 
@@ -587,13 +114,11 @@ namespace dga
         }
 #endif
 
-        //
-        // Phase 2 - backward computing & traceback [get starting locations and cigar strings of optimal local alignments]
-        //
+        /* [Phase2] backward computing & traceback: get begin locations and compute base-to-base alignment in cigar format */
         {
             auto tick1 = __rdtsc();
 
-            std::vector<std::string> readSet_P1_R;
+            std::vector<std::string> readSet_P2;
 
             size_t maxReadLength = 0;
 
@@ -606,7 +131,7 @@ namespace dga
 
                     std::string read_reverse(readSet_P1[2 * readno]);
                     dga::seqUtils::reverse(readSet_P1[2 * readno], read_reverse);
-                    readSet_P1_R.push_back(read_reverse);
+                    readSet_P2.push_back(read_reverse);
                 }
                 else
                 {
@@ -615,7 +140,7 @@ namespace dga
 
                     std::string read_reverse(readSet_P1[2 * readno + 1]);
                     dga::seqUtils::reverse(readSet_P1[2 * readno + 1], read_reverse);
-                    readSet_P1_R.push_back(read_reverse);
+                    readSet_P2.push_back(read_reverse);
                 }
 
                 outputBestScoreVector[readno].qryId = readno;
@@ -625,34 +150,24 @@ namespace dga
             }
 
             assert(outputBestScoreVector.size() == readSet.size());
-            assert(readSet_P1_R.size() == readSet.size());
-
-            // align reverse read to ref.
-#if defined(DGA_ENABLE_AVX512) || defined(DGA_ENABLE_AVX2)
-
-            // use adaptive banded vectorized alignment for reverse phase 1
-            Phase1_Rev_Vectorized_Banded<SimdInst<int32_t>> obj(readSet_P1_R, graph, parameters);
-            obj.alignToDAGLocal_Phase1_rev_Vectorized_Banded(outputBestScoreVector);
-#else
-            alignToDAGLocal_Phase1_rev_scalar(readSet_P1_R, graph, parameters, outputBestScoreVector);
-            std::vector<std::string> readSet_P2;
-
-            for (size_t readno = 0; readno < readSet.size(); readno++)
-            {
-                if (bestScoreVector_P1[2 * readno].score > bestScoreVector_P1[2 * readno + 1].score)
-                    readSet_P2.push_back(readSet_P1[2 * readno]);
-                else
-                    readSet_P2.push_back(readSet_P1[2 * readno + 1]);
-            }
-
             assert(readSet_P2.size() == readSet.size());
 
-            alignToDAGLocal_Phase2(readSet_P2, graph, parameters, outputBestScoreVector);
-
-#endif
+            // align reverse read to ref.
+            if (parameters.banded)
+            {
+                // use vectorized adaptive banded alignment for phase 2
+                Vectorized_Banded<SimdInst<int32_t>> aligner_Phase2(readSet_P2, graph, parameters);
+                aligner_Phase2.Backward_and_Traceback_Vectorized_Banded(outputBestScoreVector);
+            }
+            else
+            {
+                // use scalar non-banded alignment for phase 2
+                NonBanded aligner_Phase2(readSet_P2, graph, parameters);
+                aligner_Phase2.Backward_and_Traceback_NonBanded(outputBestScoreVector);
+            }
 
             auto tick2 = __rdtsc();
-            std::cout << "TIMER, dga::alignToDAG, CPU cycles spent in phase 2  = " << tick2 - tick1
+            std::cout << "TIMER, dga::alignToDAGLocal, CPU cycles spent in [Phase2] backward computing & traceback  = " << tick2 - tick1
                       << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
         }
 
@@ -661,6 +176,7 @@ namespace dga
             for (size_t readno = 0; readno < readSet.size(); readno++)
             {
                 std::cout << "INFO, dga::alignToDAGLocal, read # " << readno + 1 << ", score = " << outputBestScoreVector[readno].score
+                          << ", backward score = " << outputBestScoreVector[readno].backward_score
                           << ", refColumnStart = " << outputBestScoreVector[readno].refColumnStart
                           << ", refColumnEnd = " << outputBestScoreVector[readno].refColumnEnd
                           << ", qryRowStart = " << outputBestScoreVector[readno].qryRowStart

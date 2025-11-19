@@ -32,6 +32,8 @@ namespace dga
     int mismatch; // mismatch penalty (abs. value)
     int ins;      // insertion penalty (abs. value)
     int del;      // deletion penalty (abs. value)
+
+    bool banded; // banded option
   };
 
   /**
@@ -68,6 +70,7 @@ namespace dga
 
     // score value
     int32_t score;
+    int32_t backward_score;
 
     char strand; // '+' or '-'
 

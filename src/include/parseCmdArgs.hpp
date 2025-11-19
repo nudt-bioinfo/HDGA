@@ -24,6 +24,7 @@ namespace dga
     // set the default scoring scheme if not modified later
     param.match = param.mismatch = param.ins = param.del = 1;
     param.threads = 1;
+    param.banded = true;
 
     // define all arguments
     auto cli =
@@ -33,6 +34,9 @@ namespace dga
          clipp::required("-q") & clipp::value("query", param.qfile).doc("query file (fasta/fastq)[.gz]"),
          clipp::required("-o") & clipp::value("output", param.ofile).doc("output file"),
          clipp::required("-t") & clipp::value("threads", param.threads).doc("thread count for parallel execution"),
+         clipp::option("--disable-banded").call([&param]()
+                                                { param.banded = false; })
+             .doc("disable banded strategy (enabled by default)"),
          clipp::option("-match") & clipp::value("N1", param.match).doc("match score (default 1)"),
          clipp::option("-mismatch") & clipp::value("N2", param.mismatch).doc("mismatch penalty (default 1)"),
          clipp::option("-ins") & clipp::value("N3", param.ins).doc("insertion penalty (default 1)"),
@@ -59,6 +63,7 @@ namespace dga
               << " mismatch:" << param.mismatch
               << " ins:" << param.ins
               << " del:" << param.del << " ]" << std::endl;
+    std::cout << "banded: " << (param.banded ? "ON" : "OFF") << std::endl;
   }
 }
 
