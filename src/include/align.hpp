@@ -22,6 +22,7 @@
 #include "align_nonbanded.hpp"
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 // External includes
 #include "kseq/kseq.h"
@@ -55,7 +56,7 @@ namespace dga
 
         /* [Phase1] forward computing: get best score values and ending locations */
         {
-            auto tick1 = __rdtsc();
+            PhaseTimer t1("Phase1: forward computing", 0);
 
             size_t maxReadLength = 0;
 
@@ -83,24 +84,23 @@ namespace dga
             // decide precision by looking at maximum score possible
             if (maxReadLength * parameters.match <= INT8_MAX)
             {
+                t1.set_method("vectorized <8bit per cell>");
                 Phase1_Vectorized<SimdInst<int8_t>> aligner_Phase1(readSet_P1, graph, parameters);
                 aligner_Phase1.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
             }
             else if (maxReadLength * parameters.match <= INT16_MAX)
             {
+                t1.set_method("vectorized <16bit per cell>");
                 Phase1_Vectorized<SimdInst<int16_t>> aligner_Phase1(readSet_P1, graph, parameters);
                 aligner_Phase1.alignToDAGLocal_Phase1_vectorized_wrapper(bestScoreVector_P1);
             }
             // when INT32 is needed, use difference recurrence relations
             else
             {
+                t1.set_method("difference vectorized <8bit per cell>");
                 Phase1_Vectorized_Difference<SimdInst<int8_t>> aligner_Phase1(readSet_P1, graph, parameters);
                 aligner_Phase1.alignToDAGLocal_Phase1_vectorized_difference_wrapper(bestScoreVector_P1);
             }
-
-            auto tick2 = __rdtsc();
-            std::cout << "TIMER, dga::alignToDAGLocal, CPU cycles spent in [Phase1] forward computing = " << tick2 - tick1
-                      << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
         }
 
 #ifdef DEBUG
@@ -116,8 +116,7 @@ namespace dga
 
         /* [Phase2] backward computing & traceback: get begin locations and compute base-to-base alignment in cigar format */
         {
-            auto tick1 = __rdtsc();
-
+            PhaseTimer t2("Phase2: backward computing & traceback", 0);
             std::vector<std::string> readSet_P2;
 
             size_t maxReadLength = 0;
@@ -156,19 +155,17 @@ namespace dga
             if (parameters.banded)
             {
                 // use vectorized adaptive banded alignment for phase 2
+                t2.set_method("vectorized banded");
                 Vectorized_Banded<SimdInst<int32_t>> aligner_Phase2(readSet_P2, graph, parameters);
                 aligner_Phase2.Backward_and_Traceback_Vectorized_Banded(outputBestScoreVector);
             }
             else
             {
                 // use scalar non-banded alignment for phase 2
+                t2.set_method("disable banded");
                 NonBanded aligner_Phase2(readSet_P2, graph, parameters);
                 aligner_Phase2.Backward_and_Traceback_NonBanded(outputBestScoreVector);
             }
-
-            auto tick2 = __rdtsc();
-            std::cout << "TIMER, dga::alignToDAGLocal, CPU cycles spent in [Phase2] backward computing & traceback  = " << tick2 - tick1
-                      << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << std::endl;
         }
 
 #ifdef DEBUG
@@ -233,10 +230,13 @@ namespace dga
                     << qmetadata[e.qryId].len << "\t"
                     << e.qryRowStart << "\t"
                     << e.qryRowEnd << "\t"
+                    << e.refColumnStart << "\t"
+                    << e.refColumnEnd << "\t"
                     << e.strand << "\t"
                     << graph.originalVertexId[e.refColumnStart] << "\t"
                     << graph.originalVertexId[e.refColumnEnd] << "\t"
                     << e.score << "\t"
+                    << e.backward_score << "\t"
                     << e.cigar << "\n";
         }
     }

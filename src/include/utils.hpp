@@ -17,6 +17,7 @@
 #include <immintrin.h>
 #include <cassert>
 #include <stddef.h>
+#include <iomanip>
 
 #include "base_types.hpp"
 
@@ -270,6 +271,61 @@ namespace dga
              val[18], val[19], val[20], val[21], val[22], val[23],
              val[24], val[25], val[26], val[27], val[28], val[29],
              val[30], val[31]);
+    }
+  };
+
+  class PhaseTimer
+  {
+  private:
+    std::string name;
+    std::string method; // method name used in current phase
+    std::chrono::steady_clock::time_point start_time;
+    int indent_level; // indent level counter
+
+    std::string get_indent()
+    {
+      return std::string(indent_level * 4, ' ');
+    }
+
+  public:
+    // Constructor: 'method' now defaults to an empty string
+    PhaseTimer(const std::string &phase_name, int indent_level = 1, const std::string &initial_method = "")
+        : name(phase_name), indent_level(indent_level), method(initial_method)
+    {
+
+      start_time = std::chrono::steady_clock::now();
+
+      // At start: Print the method name only if it is already known
+      std::cout << get_indent() << ">> [START] " << name;
+      // if (!method.empty())
+      // {
+      //   std::cout << " (Plan: " << method << ")";
+      // }
+      std::cout << std::endl;
+    }
+
+    // [New Feature] Allows updating the method name during execution
+    void set_method(const std::string &method_name)
+    {
+      this->method = method_name;
+    }
+
+    ~PhaseTimer()
+    {
+      auto end_time = std::chrono::steady_clock::now();
+      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
+
+      std::cout << get_indent()
+                << "<< [DONE ] " << name;
+
+      // At end: Print the finally determined method name
+      if (!method.empty())
+      {
+        std::cout << " [" << method << "]";
+      }
+
+      std::cout << " | Cost: " << std::setw(4) << duration / 1000.0 << " s"
+                << std::endl;
     }
   };
 

@@ -46,16 +46,12 @@ namespace dga
         // maximum bandwidth (default value)
         const int MAX_BANDWIDTH = 1024;
 
-        // clock cycles consumed during backward computing stage
-        uint64_t backward_computing_ticks;
-
-        // clock cycles consumed during traceback stage
-        uint64_t traceback_ticks;
+        const double b = 10;   // banded parameter
+        const double f = 0.01; // banded parameter
 
         struct DPRow
         {
             int Bstart, Bend;   // band range in this row
-            int max_index;      // index of maximum value in this row
             int max_index_left; // leftmost index of maximum value in this row
             int max_value;      // maximum value in this row
             std::vector<int32_t, aligned_alloc<int32_t, 64>> values;
@@ -81,25 +77,21 @@ namespace dga
         {
             assert(bestScoreVector.size() == readSet.size());
 
-            auto tick1 = __rdtsc();
-
             // R value of each vertex in the reference graph
             std::vector<int32_t> R(graph.numVertices);
             // calculate R value of reference graph
             CalculateR(R);
 
-            backward_computing_ticks = 0;
-            traceback_ticks = 0;
-            poa_avx2(R, bestScoreVector);
-            std::cout << "time usage of backward computing(s): " << backward_computing_ticks * 1.0 / ASSUMED_CPU_FREQ << std::endl;
-            std::cout << "time usage of traceback(s): " << traceback_ticks * 1.0 / ASSUMED_CPU_FREQ << std::endl;
-
-            auto tick2 = __rdtsc();
-
-            std::cout << "TIMER, dga::Backward_and_Traceback_Vectorized_Banded"
-                      << " (precision= " << sizeof(typename SIMD::type) << " bytes)"
-                      << " CPU cycles spent = " << tick2 - tick1
-                      << ", estimated time (s) = " << (tick2 - tick1) * 1.0 / ASSUMED_CPU_FREQ << "\n";
+            // [Phase 2.1] backward computing using vectorized banded strategy
+            {
+                PhaseTimer t2_1("backward computing", 1, "vectorized banded");
+                backward_poa_avx2(R, bestScoreVector);
+            }
+            // [Phase 2.2] traceback using vectorized banded strategy
+            {
+                PhaseTimer t2_2("traceback", 1, "vectorized banded");
+                traceback_poa_avx2(R, bestScoreVector);
+            }
         }
 
     private:
@@ -177,14 +169,13 @@ namespace dga
         }
 
         /**
-         * @brief banded alignment based on poa algorithm using avx2 simd instructions
+         * @brief backward computing based on poa algorithm using avx2 simd instructions
          * @param R R value of each vertex of the graph
          * @param bestScoreVector
          */
-        void poa_avx2(const std::vector<int32_t> &R,
-                      std::vector<BestScoreInfo> &bestScoreVector)
+        void backward_poa_avx2(const std::vector<int32_t> &R,
+                               std::vector<BestScoreInfo> &bestScoreVector)
         {
-
             // number of cells processed in each vector operation
             int step = SIMD::numSeqs;
 
@@ -215,11 +206,8 @@ namespace dga
                     int Pleft, Pright;                                         // the leftmost and rightmost positions of maximum values of all predecessor rows
                     int Bstart, Bend;                                          // band range in current row
                     int Rvalue;                                                // Rvalue of current vertex
-                    double b = 10;                                             // parameter
-                    double f = 0.01;                                           // parameter
                     int w = b + f * readLen;                                   // extra bases added to both sides of the band
                     int Rstart = read.length() - qryEnd - 1;                   // starting index of the reversed read
-                    std::string cigar;                                         // base-to-base alignment result
                     int32_t bestScore = 0;
                     int32_t bestRow = 0, bestCol = 0;
 
@@ -250,7 +238,6 @@ namespace dga
                     }
 
                     /* adaptive banded DP to locate starting position */
-                    auto tick1 = __rdtsc();
                     for (int32_t i = refEnd; i >= 0; i--)
                     {
                         /* 1. compute band range */
@@ -414,7 +401,7 @@ namespace dga
                                 if (l >= readLen - Bstart) // out of bound
                                     break;
                                 int ins_edit = (l == 0) ? -parameters.ins : (current_row->values[l - 1] - parameters.ins);
-                                int current_value = std::max(match_delete[l], ins_edit);
+                                int current_value = std::max(std::max(match_delete[l], ins_edit), 0);
                                 current_row->values[l] = current_value;
                                 if (current_value > current_row_max)
                                 {
@@ -440,20 +427,65 @@ namespace dga
                         {
                             fartherRows[i]->Bstart = current_row->Bstart;
                             fartherRows[i]->Bend = current_row->Bend;
-                            fartherRows[i]->max_index = current_row_max_index_left;
+                            fartherRows[i]->max_index_left = current_row_max_index_left;
                             for (int32_t j = 0; j <= Bend - Bstart; j++)
                             {
                                 fartherRows[i]->values[j] = current_row->values[j];
                             }
                         }
                     } /* DP matrix complete */
-                    // std::cout << "readno # " << readno + 1 << ", banded score = " << bestScore << std::endl;
-                    auto tick2 = __rdtsc();
-                    backward_computing_ticks += tick2 - tick1;
 
-                    /* traceback */
-                    tick1 = __rdtsc();
-                    int32_t lines = refEnd - bestCol + 1;
+                    bestScoreVector[readno].refColumnStart = bestCol;
+                    bestScoreVector[readno].qryRowStart = read.length() - 1 - (Rstart + bestRow);
+                    bestScoreVector[readno].backward_score = bestScore;
+                    if (bestScore != forward_bestScore)
+                        fprintf(stderr, "readno: #%d, forward_score = %d, backward_score = %d\n", readno + 1, forward_bestScore, bestScore);
+                }
+            }
+        }
+
+        /**
+         * @brief traceback based on poa algorithm using avx2 simd instructions
+         * @param R R value of each vertex of the graph
+         * @param bestScoreVector
+         */
+        void traceback_poa_avx2(const std::vector<int32_t> &R,
+                                std::vector<BestScoreInfo> &bestScoreVector)
+        {
+            // number of cells processed in each vector operation
+            int step = SIMD::numSeqs;
+
+            // vectorized scoring parameters
+            __mxxxi match = SIMD::set1((typename SIMD::type)parameters.match);
+            __mxxxi mismatch = SIMD::set1((typename SIMD::type) - 1 * parameters.mismatch);
+            __mxxxi del = SIMD::set1((typename SIMD::type) - 1 * parameters.del);
+            __mxxxi ins = SIMD::set1((typename SIMD::type) - 1 * parameters.ins);
+
+            // copy graph as function variable for faster access
+            const CSR_char_container graphLocal = this->graph;
+            const std::vector<bool> withLongHopLocal = withLongHop;
+#pragma omp parallel
+            {
+
+#pragma omp for schedule(dynamic)
+                for (size_t readno = 0; readno < readSet.size(); readno++)
+                {
+                    const std::string &read = readSet[readno];                      // current read
+                    int32_t refEnd = bestScoreVector[readno].refColumnEnd;          // ending position of reference graph
+                    int32_t qryEnd = bestScoreVector[readno].qryRowEnd;             // ending position of current read
+                    int32_t bestCol = bestScoreVector[readno].refColumnStart;       // starting position of reference graph
+                    int32_t bestRow = qryEnd - bestScoreVector[readno].qryRowStart; // starting position of the reversed read
+
+                    int32_t lines = refEnd - bestCol + 1;    // the number of lines between starting and ending positions
+                    int Mstart, Mend;                        // maximum row range
+                    int Pleft, Pright;                       // the leftmost and rightmost positions of maximum values of all predecessor rows
+                    int Bstart, Bend;                        // band range in current row
+                    int readLen = qryEnd + 1;                // effective read length
+                    int Rvalue;                              // Rvalue of current vertex
+                    int w = b + f * readLen;                 // extra bases added to both sides of the band
+                    int Rstart = read.length() - qryEnd - 1; // starting index of the reversed read
+                    std::string cigar;                       // base-to-base alignment result
+
                     // information of all lines from bestCol to refEnd
                     std::vector<DPRow> dp_band(lines);
                     for (int i = 0; i < lines; i++)
@@ -462,6 +494,7 @@ namespace dga
                         dp_band[i].Bend = 0;
                         dp_band[i].values.resize(MAX_BANDWIDTH, 0);
                     }
+
                     for (int32_t i = refEnd; i >= bestCol; i--)
                     {
                         /* 1. compute band range */
@@ -474,18 +507,18 @@ namespace dga
                             bool have_pre = false; // if there is any predecessor row
                             for (auto k = graphLocal.offsets_out[i]; k < graphLocal.offsets_out[i + 1]; k++)
                             {
-                                have_pre = true;
                                 size_t m = graphLocal.adjcny_out[k]; // index of predecessor row
                                 DPRow *prow;                         // pointer to predecessor row
                                 if (m > refEnd)
                                     continue;
+                                have_pre = true;
                                 prow = &dp_band[refEnd - m];
 
-                                int pre_max_index = prow->max_index_left;
-                                if (pre_max_index < Pleft)
-                                    Pleft = pre_max_index;
-                                if (pre_max_index > Pright)
-                                    Pright = pre_max_index;
+                                int pre_max_index_left = prow->max_index_left;
+                                if (pre_max_index_left < Pleft)
+                                    Pleft = pre_max_index_left;
+                                if (pre_max_index_left > Pright)
+                                    Pright = pre_max_index_left;
                             }
                             if (have_pre)
                             {
@@ -629,6 +662,7 @@ namespace dga
                         }
                         current_row->max_index_left = current_row_max_index_left;
                     }
+
                     int current_i = bestCol;
                     int current_j = bestRow;
                     while (current_i <= refEnd && current_j >= 0)
@@ -717,15 +751,6 @@ namespace dga
                     // shorten the cigar string
                     dga::seqUtils::cigarCompact(cigar);
                     bestScoreVector[readno].cigar = cigar;
-
-                    tick2 = __rdtsc();
-                    traceback_ticks = tick2 - tick1;
-
-                    bestScoreVector[readno].refColumnStart = bestCol;
-                    bestScoreVector[readno].qryRowStart = read.length() - 1 - (Rstart + bestRow);
-                    bestScoreVector[readno].backward_score = bestScore;
-                    if (bestScore != forward_bestScore)
-                        fprintf(stderr, "readno: #%d, forward_score = %d, backward_score = %d\n", readno + 1, forward_bestScore, bestScore);
                 }
             }
         }

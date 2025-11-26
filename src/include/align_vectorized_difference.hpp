@@ -1661,11 +1661,6 @@ namespace dga
 
             } // end of omp parallel
 
-            std::cout << "TIMER, dga::alignToDAGLocal_Phase1_vectorized"
-                      << " (precision= " << sizeof(typename SIMD::type) << " bytes)\n"
-                      << ", individual thread timings (s) : "
-                      << printStats(threadTimings) << "\n";
-
 #ifdef VTUNE_SUPPORT
             __itt_pause();
 #endif
