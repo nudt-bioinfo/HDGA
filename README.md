@@ -1,54 +1,138 @@
-# DGA
+# HDGA
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-DGA (**D**ifference-based **G**raph **A**ligner) is a vectorized sequence-to-graph alignment tool based on difference recurrence that could produce optimal alignment results. We first introduce a novel difference recurrence instead of the classical Smith-Waterman algorithm. By doing so, our algorithm can keep the number of bits required to store each cell score within 8 even when aligning long reads, and subsequently maintain the highest parallelism of vectorization. In addition, we employ an adaptive banded approach that significantly reduces the number of cells that require computation.
+HDGA (**H**eterogeneous **D**ifference-based **G**raph **A**ligner) is a high-performance sequence-to-graph alignment tool designed for heterogeneous CPU–GPU systems.  HDGA introduces a CPU–GPU collaborative parallel framework with a heuristic scheduling strategy to enable load-balanced execution across heterogeneous hardware. On top of this system design, it incorporates a difference-based recurrence formulation that maintains high SIMD parallelism regardless of read length, as well as an adaptive banded dynamic programming strategy that reduces unnecessary computation while preserving optimal alignment accuracy. HDGA builds upon the [PaSGAL](https://github.com/ParBLiSS/PaSGAL) framework for input preprocessing and output formatting. 
 
-<!-- ![workflow of DGA](workflow.svg) -->
 <p align="center">
   <img src="workflow.svg" width="100%">
   <br>
-  <em>Fig: Workflow of DGA.</em>
+  <em>Fig: Workflow of HDGA.</em>
 </p>
 
 
 
-## Build & Usage
-### Dependencies
-<!-- DGA requires the following environment and libraries to build and run properly: -->
+## Requirements
 
-#### Library dependencies
-- [Google Protobuf](https://github.com/protocolbuffers/protobuf.git) library (can also be installed via [conda](https://anaconda.org/anaconda/protobuf))
+HDGA requires the following environment and libraries to build and run properly.
 
+### Hardware Requirements
 
-#### Compiler recommendation
-- cmake (version ≥ 3.1)
-- A C++17-compatible compiler, such as GNU g++ (version 7+) or Intel oneAPI [icpx](https://www.intel.cn/content/www/cn/zh/developer/tools/oneapi/dpc-compiler-download.html) (version 2022.0 or later). 
+- **CPU**: AVX2 support required (tested on Intel Xeon Gold 6230)
+- **GPU**: NVIDIA GPU with CUDA support (tested on RTX A6000)
+- **Memory**: 64 GB RAM or higher recommended (256 GB used in our experiments)
 
-We recommend using the Intel oneAPI C++ compiler (icpx) for compilation, as it provides better optimization for Intel SIMD instruction sets.
+HDGA is optimized for the `AVX2` instruction set. Please ensure your CPU supports AVX2 (check via `/proc/cpuinfo` on Linux).
 
-#### Hardware requirement
-Our implementation is optimized for the `AVX2` instruction set. Therefore, please make sure your CPU supports `AVX2` before compilation. The supported instruction set is listed in the `flags` section of the `/proc/cpuinfo` file on the Linux OS.
+---
 
+### Software Requirements
 
+- **Operating System**: Ubuntu 20.04 LTS
+- **CUDA Toolkit**: 12.2
+- **NVIDIA Driver**: 535.183.01
+- **Compiler**:
+  - Intel oneAPI DPC++/C++ Compiler (recommended)
+  - or GCC with C++17 support (AVX2 enabled)
+- **CMake**: ≥ 3.1
 
-### Quickstart
-The following provides an example of how to build and run DGA.
+---
 
+### Required Libraries and Tools
+
+- [Google Protobuf](https://github.com/protocolbuffers/protobuf) (can also be installed via conda)
+- vg toolkit (v1.70)
+- ART (MountRainier, 2016-06-05)
+- PBSIM (v1.0.3)
+
+---
+
+### Notes
+
+- Intel oneAPI compiler is recommended for better SIMD optimization on Intel CPUs.
+- GPU acceleration requires a CUDA-capable device with sufficient memory (≥16 GB recommended).
+
+---
+
+## Installation and Deployment
+### Build
 ```sh
-# download and compile
-git clone https://github.com/nudt-bioinfo/DGA.git
-cd DGA
-mkdir build && cd build
-cmake -DSIMD_SUPPORT=avx2 -DCMAKE_CXX_COMPILER=icpx  ../DGA
-make -j4
-
-# run
-./DGA -m vg -r ../data/graph.vg -q ../data/reads.fastq -t 16 -o outputfile
+git clone https://github.com/nudt-bioinfo/HDGA.git
+cd HDGA
+./build.sh
 ```
 
+HDGA provides an interactive build script to compile different execution modes, you will be prompted to select the build target:
 
-## Datasets
+- **CPU version** (AVX2 required)
+- **GPU version** (CUDA required)
+- **Hybrid version** (CPU–GPU collaborative, recommended)
+
+The script will automatically configure and compile the selected components.
+
+### Run
+
+HDGA provides a unified execution script:
+```sh
+./run.sh
+```
+The script supports interactive configuration of the following options:
+
+- Execution mode:
+  - CPU
+  - GPU
+  - CPU–GPU collaborative (recommended)
+
+- Number of CPU threads
+- Input datasets:
+  - Reference graph (e.g., BRCA1.vg, LRC.vg)
+  - Read set
+- Output path
+- Alignment configuration:
+  - Enable/disable adaptive banded mode
+
+## Quickstart
+The following example demonstrates how to run HDGA using the provided script and built-in datasets:
+```sh
+./run.sh
+========================================
+        HDGA Interactive Runner         
+========================================
+
+Select execution mode:
+1) CPU
+2) GPU
+3) CPU-GPU Collaborative (recommended)
+Enter choice [1-3]: 3
+
+Enter number of CPU threads (e.g., 16): 16
+
+Enter path to reference graph (.vg): ../data/graph/BRCA1.vg
+
+Enter path to reads file (.fastq): ../data/reads/reads.fa
+
+Enter output file prefix: outputfile
+
+Enable adaptive banded mode?
+1) Yes (recommended for reads ≥ 1kbp)
+2) No
+Enter choice [1-2]: 2
+
+========================================
+Running HDGA with the following config:
+Mode: hybrid
+Threads: 16
+Graph: ../data/graph/BRCA1.vg
+Reads: ../data/reads/reads.fa
+Output: outputfile
+Banded: 
+========================================
+
+Done.
+
+```
+
+<!-- ## Datasets
 ### Reference genome
 - Human genome GRCh38.p14: https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000001405.40/
 
@@ -67,16 +151,4 @@ The reference graph is constructed using [vg](https://anaconda.org/bioconda/vg) 
 | linear E.coli | GCF_003697165.2_ASM369716v2_genomic.fna | \                                                            |
 
 ### Readset
-The Long Pacbio readset were simulated using [pbsim](https://anaconda.org/bioconda/pbsim).
-
-
-## Code Origin and License Notice
-This project builds upon the open-source implementation of [PaSGAL](https://github.com/ParBLiSS/PaSGAL.git)
-, from which we reuse components related to command-line argument parsing, input preprocessing, and output formatting.
-
-The algorithmic core and main implementation in this repository were independently developed by us.
-
-The reused parts from PaSGAL are licensed under the MIT License
-.
-
-Our modifications and new implementations are also released under the MIT License.
+The Long Pacbio readset were simulated using [pbsim](https://anaconda.org/bioconda/pbsim). -->
