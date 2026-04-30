@@ -142,3 +142,8 @@ INFO, hdga::main, run finished
 
 Done.
 ```
+
+## License
+
+HDGA is released under the MIT License.  
+This repository includes portions derived from the PaSGAL project, which is also licensed under MIT.
