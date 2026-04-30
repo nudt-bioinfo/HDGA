@@ -15,7 +15,7 @@
 #include "csr.hpp"
 #include "graph_iter.hpp"
 
-namespace dga
+namespace hdga
 {
 
   /**
@@ -135,8 +135,6 @@ namespace dga
 #ifndef NDEBUG
       this->verify();
 #endif
-
-      std::cout << "INFO, dga::CSR_char_container::build, graph converted to CSR format with character labels, n = " << this->numVertices << ", m = " << this->numEdges << std::endl;
     }
 
     /**

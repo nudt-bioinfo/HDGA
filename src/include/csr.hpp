@@ -14,7 +14,7 @@
 // Own includes
 #include "utils.hpp"
 
-namespace dga
+namespace hdga
 {
 
   /**
@@ -275,7 +275,7 @@ namespace dga
      */
     void printGraph() const
     {
-      std::cerr << "DEBUG, dga::CSR_container::printGraph, Printing complete graph" << std::endl;
+      std::cerr << "DEBUG, hdga::CSR_container::printGraph, Printing complete graph" << std::endl;
       std::cerr << this->numVertices << std::endl;
 
       for (int32_t i = 0; i < this->numVertices; i++)
@@ -286,7 +286,7 @@ namespace dga
         std::cerr << vertex_metadata[i] << "\n";
       }
 
-      std::cerr << "DEBUG, dga::CSR_container::printGraph, Printing done" << std::endl;
+      std::cerr << "DEBUG, hdga::CSR_container::printGraph, Printing done" << std::endl;
     }
 
     /**
@@ -338,9 +338,6 @@ namespace dga
       std::vector<int32_t> order(this->numVertices);
 
       topologicalSort(order);
-
-      std::cout << "INFO, dga::CSR_container::sort, topological sort computed, bandwidth = " << directedBandwidth(order) << std::endl;
-      std::cout << "INFO, dga::CSR_container::sort, relabeling graph based on the computed order" << std::endl;
 
       // Sorted position to vertex id mapping (reverse order)
       // preserve the old IDs before relabeling for final output reporting
@@ -581,7 +578,7 @@ namespace dga
       }
 
 #ifdef DEBUG
-      std::cerr << "DEBUG, dga::CSR_container::directedBandwidth, Bandwidth deciding positions = " << logFarthestPositions.first << ", " << logFarthestPositions.second << std::endl;
+      std::cerr << "DEBUG, hdga::CSR_container::directedBandwidth, Bandwidth deciding positions = " << logFarthestPositions.first << ", " << logFarthestPositions.second << std::endl;
 #endif
 
       return bandwidth;

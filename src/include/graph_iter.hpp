@@ -9,7 +9,7 @@
 
 #include "base_types.hpp"
 
-namespace dga
+namespace hdga
 {
   /**
    * @brief     class to allow convenient iteration over reference characters

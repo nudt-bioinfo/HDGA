@@ -4,8 +4,8 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef dga_UTILS_HPP
-#define dga_UTILS_HPP
+#ifndef hdga_UTILS_HPP
+#define hdga_UTILS_HPP
 
 #include <random>
 #include <iterator>
@@ -21,7 +21,7 @@
 
 #include "base_types.hpp"
 
-namespace dga
+namespace hdga
 {
   namespace random
   {
@@ -343,37 +343,6 @@ namespace dga
    */
   void showExecutionEnv()
   {
-    std::cout << "--------" << "\n";
-
-    {
-      std::cout << "Assert() checks";
-#ifdef NDEBUG
-      std::cout << "\t\t\tOFF \n";
-#else
-      std::cout << "\t\t\tON \n";
-#endif
-    }
-
-    {
-      std::cout << "AVX SIMD support";
-#ifdef DGA_ENABLE_AVX512
-      std::cout << "\t\tON (AVX512) \n";
-#elif DGA_ENABLE_AVX2
-      std::cout << "\t\tON (AVX2) \n";
-#else
-      std::cout << "\t\tOFF\n";
-#endif
-    }
-
-    {
-      std::cout << "VTUNE profiling";
-#ifdef VTUNE_SUPPORT
-      std::cout << "\t\t\tON \n";
-#else
-      std::cout << "\t\t\tOFF\n";
-#endif
-    }
-
     // initialize threads outside the main computation block
 #pragma omp parallel
     {
@@ -385,9 +354,6 @@ namespace dga
         asm volatile("nop");
       }
     }
-
-    std::cout << "--------\n"
-              << std::endl;
   }
 
   /**

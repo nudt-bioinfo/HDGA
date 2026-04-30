@@ -2,11 +2,31 @@ cmake_minimum_required(VERSION 3.1)
 include(CheckCXXCompilerFlag)
 
 # project settings
-project(DGA)
+project(HDGA)
+
+# ========== GPU 配置 ==========
+OPTION(USE_GPU_PHASE1 "Use GPU implementation for Phase1 alignment" OFF)
+OPTION(USE_GPU_PHASE2 "Use GPU implementation for Phase2 alignment" OFF)
+
+IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
+  enable_language(CUDA)
+  find_package(CUDAToolkit REQUIRED)
+  message(STATUS "CUDA enabled, version: ${CUDAToolkit_VERSION}")
+ENDIF()
 
 ##### General Compilation Settings
 set(CMAKE_CXX_FLAGS "-w ${CMAKE_CXX_FLAGS}")
 set(CMAKE_CXX_STANDARD 14)
+
+# ========== 添加 CUDA 编译设置 ==========
+IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
+  set(CMAKE_CUDA_STANDARD 14)
+  set(CMAKE_CUDA_ARCHITECTURES 86) # 适配显卡架构，可根据实际修改
+  # 移除 -v 选项以隐藏 ptxas 详细信息
+  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 -Xptxas -O3")
+  # 添加 CUDA 头文件路径，使普通 C++ 文件也能找到 cuda_runtime.h
+  include_directories(${CUDAToolkit_INCLUDE_DIRS})
+ENDIF()
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
@@ -33,41 +53,33 @@ IF(DEFINE_DEBUG_MACRO)
   ADD_DEFINITIONS(-DDEBUG)
 ENDIF(DEFINE_DEBUG_MACRO)
 
-# Assume avx512 availability by default
-SET(SIMD_SUPPORT avx512 CACHE STRING "Choose SIMD instrinsics, options are: avx512 avx2 none")
-SET_PROPERTY(CACHE SIMD_SUPPORT PROPERTY STRINGS avx512 avx2 none)
+# Assume avx2 availability by default
+SET(SIMD_SUPPORT avx2 CACHE STRING "Choose SIMD instrinsics, options are: avx2 none")
+SET_PROPERTY(CACHE SIMD_SUPPORT PROPERTY STRINGS avx2 none)
 
 #User expected to provide the SIMD option
-if (SIMD_SUPPORT STREQUAL avx2 OR SIMD_SUPPORT STREQUAL avx512)
-  # Check if compiler supports AVX
+if (SIMD_SUPPORT STREQUAL avx2)
+  # Check if compiler supports AVX2
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    check_cxx_compiler_flag("-mavx512f" COMPILER_SUPPORT_AVX)
-    if(COMPILER_SUPPORT_AVX)
-      message(STATUS "GNU C++ compiler supports AVX")
+    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORT_AVX2)
+    if(COMPILER_SUPPORT_AVX2)
+      message(STATUS "GNU C++ compiler supports AVX2")
     else()
-      message(FATAL_ERROR "Compiler version required: GCC (>= 4.9) or Intel (>= 15)")
+      message(FATAL_ERROR "Compiler must support AVX2 (GCC >= 4.9 or Intel >= 15)")
     endif()
   endif()
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-    check_cxx_compiler_flag("-xCORE-AVX512" COMPILER_SUPPORT_AVX)
-    if(COMPILER_SUPPORT_AVX)
-      message(STATUS "Intel C++ compiler supports AVX")
+    check_cxx_compiler_flag("-xCORE-AVX2" COMPILER_SUPPORT_AVX2)
+    if(COMPILER_SUPPORT_AVX2)
+      message(STATUS "Intel C++ compiler supports AVX2")
     else()
-      message(FATAL_ERROR "Compiler version required: GCC (>= 4.9) or  Intel (>= 15)")
+      message(FATAL_ERROR "Compiler must support AVX2 (GCC >= 4.9 or Intel >= 15)")
     endif()
   endif()
 
-  #compiler flag to enable AVX512 SIMD instructions
-  if (SIMD_SUPPORT STREQUAL avx512)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -DDGA_ENABLE_AVX512")
-    message(STATUS "Enabling AVX512...")
-  endif()
-
-  #compiler flag to enable AVX2 simd instructions
-  if (SIMD_SUPPORT STREQUAL avx2)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -DDGA_ENABLE_AVX2")
-    message(STATUS "Enabling AVX2...")
-  endif()
+  # compiler flag to enable AVX2 simd instructions
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -DHDGA_ENABLE_AVX2")
+  message(STATUS "Enabling AVX2...")
 
 else()
 
@@ -104,21 +116,34 @@ if (BUILD_TESTS)
 endif(BUILD_TESTS)
 
 ### Include protobuf
-# Ask user to set the following variable PROTOBUF_DIR 
-set(PROTOBUF_DIR "/home/wqz/anaconda3/envs/bioinfo" CACHE STRING "absolute path to protobuf installation directory")
+# Allow PROTOBUF_DIR to be set by cache or environment, otherwise use system discovery.
+if(NOT PROTOBUF_DIR AND DEFINED ENV{PROTOBUF_DIR})
+  set(PROTOBUF_DIR "$ENV{PROTOBUF_DIR}" CACHE STRING "absolute path to protobuf installation directory")
+endif()
 
-# The variables below are set based on PROTOBUF_DIR
-set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_DIR}/include")
-set(PROTOBUF_LIBRARY "${PROTOBUF_DIR}/lib/libprotobuf.so")
-set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
-
-if(EXISTS "${PROTOBUF_INCLUDE_DIR}" AND EXISTS "${PROTOBUF_LIBRARY}" AND EXISTS "${PROTOBUF_PROTOC_EXECUTABLE}")
-  message(STATUS "Protobuf libraries, header files and executables located")
-else()
-  message(FATAL_ERROR "Protobuf path is invalid, cannot find required libraries, header files or executables. Set the cmake variable PROTOBUF_DIR properly.")
+if(PROTOBUF_DIR)
+  set(CMAKE_PREFIX_PATH "${PROTOBUF_DIR};${CMAKE_PREFIX_PATH}")
 endif()
 
 find_package(Protobuf REQUIRED)
+
+if(PROTOBUF_DIR)
+  # The variables below are set based on PROTOBUF_DIR
+  set(PROTOBUF_INCLUDE_DIR "${PROTOBUF_DIR}/include")
+  set(PROTOBUF_LIBRARY "${PROTOBUF_DIR}/lib/libprotobuf.so")
+  set(PROTOBUF_PROTOC_EXECUTABLE "${PROTOBUF_DIR}/bin/protoc")
+
+  if(EXISTS "${PROTOBUF_INCLUDE_DIR}" AND EXISTS "${PROTOBUF_LIBRARY}" AND EXISTS "${PROTOBUF_PROTOC_EXECUTABLE}")
+    message(STATUS "Protobuf libraries, header files and executables located")
+  else()
+    message(FATAL_ERROR "Protobuf path is invalid; set PROTOBUF_DIR or install Protobuf in system paths.")
+  endif()
+else()
+  set(PROTOBUF_INCLUDE_DIR ${Protobuf_INCLUDE_DIRS})
+  set(PROTOBUF_LIBRARY ${Protobuf_LIBRARIES})
+  set(PROTOBUF_PROTOC_EXECUTABLE ${Protobuf_PROTOC_EXECUTABLE})
+endif()
+
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
 ### Include and compile htslib
@@ -141,6 +166,7 @@ include_directories("${PROJECT_SOURCE_DIR}/ext")
 #include our own directories
 include_directories("${PROJECT_SOURCE_DIR}/src/include")
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
+# add_subdirectory("${PROJECT_SOURCE_DIR}/tests")
 
 #### To compile with Intel vtune library if requested
 if(ENABLE_VTUNE)
@@ -150,6 +176,31 @@ if(ENABLE_VTUNE)
   add_definitions(-DVTUNE_SUPPORT)
 endif(ENABLE_VTUNE)
 
-add_executable(DGA "${PROJECT_SOURCE_DIR}/src/main.cpp")
-add_dependencies(DGA LIBHTS SYMLNK)
-target_link_libraries(DGA ${PROTOBUF_LIBRARY} LIBVGIO ${HTS_LIBRARY} ${VTUNE_LIBRARY} -lz -lpthread)
+# ========== 根据选项添加宏定义 ==========
+IF(USE_GPU_PHASE1)
+  ADD_DEFINITIONS(-DUSE_GPU_PHASE1)
+  message(STATUS "GPU Phase1 alignment enabled")
+ENDIF(USE_GPU_PHASE1)
+
+IF(USE_GPU_PHASE2)
+  ADD_DEFINITIONS(-DUSE_GPU_PHASE2)
+  message(STATUS "GPU Phase2 alignment enabled")
+ENDIF(USE_GPU_PHASE2)
+
+# ========== 设置源文件 ==========
+set(HDGA_SRCS
+  src/main.cpp
+)
+
+# 如果启用了 GPU，添加 CUDA 源文件
+IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
+  list(APPEND HDGA_SRCS src/align_gpu_kernel.cu)
+ENDIF()
+
+add_executable(HDGA ${HDGA_SRCS})
+add_dependencies(HDGA LIBHTS SYMLNK)
+target_link_libraries(HDGA ${PROTOBUF_LIBRARY} LIBVGIO ${HTS_LIBRARY} ${VTUNE_LIBRARY} -lz -lpthread)
+
+IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
+  target_link_libraries(HDGA ${CUDAToolkit_LIBRARIES})
+ENDIF()

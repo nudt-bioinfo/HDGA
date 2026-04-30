@@ -19,7 +19,7 @@
 #include "vg/io/basic_stream.hpp"
 #include "vg/vg.pb.h"
 
-namespace dga
+namespace hdga
 {
 
   /**

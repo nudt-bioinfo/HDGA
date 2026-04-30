@@ -20,7 +20,7 @@
 // 引用正向的向量化差分头文件，获取封装好的向量操作
 #include "align_vectorized_difference.hpp"
 
-namespace dga
+namespace hdga
 {
 
     /**
@@ -94,7 +94,7 @@ namespace dga
             }
         }
 
-    private:
+    public:
         /**
          * @brief     precompute which vertices are connected with long edge hops
          *            i.e. longer than 'blockWidth'
@@ -120,7 +120,7 @@ namespace dga
 
 #ifdef DEBUG
             auto trueCount = std::count(withLongHop.begin(), withLongHop.end(), true);
-            std::cout << "INFO, dga::Phase1_Rev_Vectorized_Banded::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
+            std::cout << "INFO, hdga::Phase1_Rev_Vectorized_Banded::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
 #endif
         }
 
@@ -749,12 +749,12 @@ namespace dga
                     }
 
                     // shorten the cigar string
-                    dga::seqUtils::cigarCompact(cigar);
+                    hdga::seqUtils::cigarCompact(cigar);
                     bestScoreVector[readno].cigar = cigar;
                 }
             }
         }
     };
 
-} // namespace dga
+} // namespace hdga
 #endif

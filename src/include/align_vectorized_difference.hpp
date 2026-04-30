@@ -24,15 +24,15 @@ using namespace std;
 
 #define DUMMY 'B'
 
-#if defined(DGA_ENABLE_AVX512)
+#if defined(HDGA_ENABLE_AVX512)
 #define SIMD_REG_SIZE 512
 typedef __m512i __mxxxi;
-#elif defined(DGA_ENABLE_AVX2)
+#elif defined(HDGA_ENABLE_AVX2)
 #define SIMD_REG_SIZE 256
 typedef __m256i __mxxxi;
 #endif
 
-namespace dga
+namespace hdga
 {
     /**
      * Parameters and SIMD instructions specific for different score precisions required
@@ -48,7 +48,7 @@ namespace dga
     {
         typedef int32_t type;
 
-#if defined(DGA_ENABLE_AVX512)
+#if defined(HDGA_ENABLE_AVX512)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         typedef __mmask16 mmask_t;
         static inline __mxxxi add(const __mxxxi &a, const __mxxxi &b) { return _mm512_add_epi32(a, b); }
@@ -67,7 +67,7 @@ namespace dga
         static inline mmask_t combine_mask(mmask_t k0, mmask_t k1, mmask_t k2, mmask_t k3) { return k0; }
         static inline void update_cols(__mxxxi &c0, __mxxxi &c1, __mxxxi &c2, __mxxxi &c3, int32_t val, mmask_t k) { c0 = mask_set1_32(c0, k, val); }
 
-#elif defined(DGA_ENABLE_AVX2)
+#elif defined(HDGA_ENABLE_AVX2)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         static inline __mxxxi add(const __mxxxi &a, const __mxxxi &b) { return _mm256_add_epi32(a, b); }
         static inline __mxxxi sub(const __mxxxi &a, const __mxxxi &b) { return _mm256_sub_epi32(a, b); }
@@ -92,7 +92,7 @@ namespace dga
     {
         typedef int16_t type;
 
-#if defined(DGA_ENABLE_AVX512)
+#if defined(HDGA_ENABLE_AVX512)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         typedef __mmask32 mmask_t;
         typedef SimdInst<int32_t>::mmask_t mmask_T; // for 32-bit integer operations
@@ -119,7 +119,7 @@ namespace dga
             c1 = mask_set1_32(c1, k >> 16, val);
         }
 
-#elif defined(DGA_ENABLE_AVX2)
+#elif defined(HDGA_ENABLE_AVX2)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         static inline __mxxxi add(const __mxxxi &a, const __mxxxi &b) { return _mm256_add_epi16(a, b); }
         static inline __mxxxi sub(const __mxxxi &a, const __mxxxi &b) { return _mm256_sub_epi16(a, b); }
@@ -151,7 +151,7 @@ namespace dga
     {
         typedef int8_t type;
 
-#if defined(DGA_ENABLE_AVX512)
+#if defined(HDGA_ENABLE_AVX512)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         typedef __mmask64 mmask_t;
         typedef SimdInst<int32_t>::mmask_t mmask_T; // for 32-bit integer operations
@@ -180,7 +180,7 @@ namespace dga
             c3 = mask_set1_32(c3, k >> 48, val);
         }
 
-#elif defined(DGA_ENABLE_AVX2)
+#elif defined(HDGA_ENABLE_AVX2)
         static constexpr int numSeqs = SIMD_REG_SIZE / (8 * sizeof(type));
         static inline __mxxxi add(const __mxxxi &a, const __mxxxi &b) { return _mm256_add_epi8(a, b); }
         static inline __mxxxi add_32(const __mxxxi &a, const __mxxxi &b) { return _mm256_add_epi32(a, b); }
@@ -352,7 +352,7 @@ namespace dga
                         outputBestScoreVector[originalReadId].qryRowEnd = storeRows[j];
 
 #ifdef DEBUG
-                        std::cout << "INFO, dga::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int)storeScores[j] << ", qryRowEnd = " << (int)storeRows[j] << ", refColumnEnd = " << (int)storeCols[j] << "\n";
+                        std::cout << "INFO, hdga::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int)storeScores[j] << ", qryRowEnd = " << (int)storeRows[j] << ", refColumnEnd = " << (int)storeCols[j] << "\n";
 #endif
                     }
                 }
@@ -454,7 +454,7 @@ namespace dga
 
 #ifdef DEBUG
             auto trueCount = std::count(withLongHop.begin(), withLongHop.end(), true);
-            std::cout << "INFO, dga::Phase1_Vectorized::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
+            std::cout << "INFO, hdga::Phase1_Vectorized::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
 #endif
         }
 
@@ -1162,7 +1162,7 @@ namespace dga
 
             } // omp parallel ended
 
-            std::cout << "TIMER, dga::alignToDAGLocal_Phase1_vectorized_difference"
+            std::cout << "TIMER, hdga::alignToDAGLocal_Phase1_vectorized_difference"
                       << " (precision= " << sizeof(typename SIMD::type) << " bytes)\n";
             //           << ", individual thread timings (s) : "
             //           << printStats(threadTimings) << "\n";
@@ -1304,7 +1304,7 @@ namespace dga
                         outputBestScoreVector[originalReadId].qryRowEnd = storeRows[j];
 
 #ifdef DEBUG
-                        std::cout << "INFO, dga::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int)storeScores[j] << ", qryRowEnd = " << (int)storeRows[j] << ", refColumnEnd = " << (int)storeCols[j] << "\n";
+                        std::cout << "INFO, hdga::Phase1_Vectorized::alignToDAGLocal_Phase1_vectorized_wrapper, read # " << originalReadId << ",  score = " << (int)storeScores[j] << ", qryRowEnd = " << (int)storeRows[j] << ", refColumnEnd = " << (int)storeCols[j] << "\n";
 #endif
                     }
                 }
@@ -1404,7 +1404,7 @@ namespace dga
 
 #ifdef DEBUG
             auto trueCount = std::count(withLongHop.begin(), withLongHop.end(), true);
-            std::cout << "INFO, dga::Phase1_Vectorized::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
+            std::cout << "INFO, hdga::Phase1_Vectorized::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
 #endif
         }
 

@@ -40,10 +40,11 @@ HDGA is optimized for the `AVX2` instruction set. Please ensure your CPU support
 
 ### Required Libraries and Tools
 
+- System development packages:
+  - `zlib1g-dev`
+  - `libbz2-dev`
+  - `liblzma-dev`
 - [Google Protobuf](https://github.com/protocolbuffers/protobuf) (can also be installed via conda)
-- vg toolkit (v1.70)
-- ART (MountRainier, 2016-06-05)
-- PBSIM (v1.0.3)
 
 ---
 
@@ -96,59 +97,48 @@ The following example demonstrates how to run HDGA using the provided script and
 ```sh
 ./run.sh
 ========================================
-        HDGA Interactive Runner         
+           HDGA Interactive Run         
 ========================================
 
-Select execution mode:
+Select run mode:
 1) CPU
 2) GPU
-3) CPU-GPU Collaborative (recommended)
-Enter choice [1-3]: 3
+3) Hybrid (CPU+GPU collaborative)
+Enter choice [1-3]: 1
 
-Enter number of CPU threads (e.g., 16): 16
+Enter number of CPU threads (default 16): 
 
-Enter path to reference graph (.vg): ../data/graph/BRCA1.vg
+Enter path to reference graph (.vg): data/graph/sars_cov_2.vg 
 
-Enter path to reads file (.fastq): ../data/reads/reads.fa
+Enter path to reads file (.fastq/.fa): data/reads/reads.fq 
 
-Enter output file prefix: outputfile
+Enter output file prefix (default hdga_output): outputfile
 
 Enable adaptive banded mode?
-1) Yes (recommended for reads ≥ 1kbp)
+1) Yes (recommended for long reads)
 2) No
 Enter choice [1-2]: 2
 
 ========================================
 Running HDGA with the following config:
-Mode: hybrid
+Mode: cpu
+Build dir: /home/wqz/HDGA/HDGA/build_cpu
 Threads: 16
-Graph: ../data/graph/BRCA1.vg
-Reads: ../data/reads/reads.fa
+Graph: /home/wqz/HDGA/HDGA/data/graph/sars_cov_2.vg
+Reads: /home/wqz/HDGA/HDGA/data/reads/reads.fq
 Output: outputfile
-Banded: 
+Banded: --disable-banded
 ========================================
 
+>> [START] Phase1: forward computing
+<< [DONE ] Phase1: forward computing [vectorized <16bit per cell>] | Cost: 0.505 s
+>> [START] Phase2: backward computing & traceback
+    >> [START] backward computing
+    << [DONE ] backward computing [disable banded] | Cost: 0.025 s
+    >> [START] traceback
+    << [DONE ] traceback [disable banded] | Cost: 0.026 s
+<< [DONE ] Phase2: backward computing & traceback [disable banded] | Cost: 0.052 s
+INFO, hdga::main, run finished
+
 Done.
-
 ```
-
-<!-- ## Datasets
-### Reference genome
-- Human genome GRCh38.p14: https://www.ncbi.nlm.nih.gov/datasets/genome/GCF_000001405.40/
-
-- E.coli genome (Strain:ATCC11775, ASM369716v2): https://gtdb.ecogenomic.org/genome?gid=GCF_003697165.2
-
-### VCF files
-VCF files for GRCh38 in 1000 Genomes Project: https://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20190312_biallelic_SNV_and_INDEL/
-
-### Reference graph
-The reference graph is constructed using [vg](https://anaconda.org/bioconda/vg) from the reference genome and VCF files.
-
-| graph         | reference genome (chr – region)         | vcf                                                          |
-| ------------- | --------------------------------------- | ------------------------------------------------------------ |
-| LRC           | GRCh38.p14 Chr19: 54025633-55084318     | the same region in ALL.chr19.shapeit2_integrated_snvindels_v2a_27022019.GRCh38.phased.vcf.gz |
-| MHC           | GRCh38.p14 Chr6: 28510119-33480577      | the same region in ALL.chr6.shapeit2_integrated_snvindels_v2a_27022019.GRCh38.phased.vcf.gz |
-| linear E.coli | GCF_003697165.2_ASM369716v2_genomic.fna | \                                                            |
-
-### Readset
-The Long Pacbio readset were simulated using [pbsim](https://anaconda.org/bioconda/pbsim). -->

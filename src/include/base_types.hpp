@@ -4,16 +4,16 @@
  * @author  Chirag Jain <cjain7@gatech.edu>
  */
 
-#ifndef dga_BASETYPES_HPP
-#define dga_BASETYPES_HPP
+#ifndef hdga_BASETYPES_HPP
+#define hdga_BASETYPES_HPP
 
 #include <immintrin.h>
 
-#define dga_max(a, b) (((a) > (b)) ? (a) : (b))
+#define hdga_max(a, b) (((a) > (b)) ? (a) : (b))
 #define ASSUMED_CPU_FREQ 2100000000
-#define dga_STATUS_OK 0
+#define hdga_STATUS_OK 0
 
-namespace dga
+namespace hdga
 {
 
   /**
@@ -34,6 +34,10 @@ namespace dga
     int del;      // deletion penalty (abs. value)
 
     bool banded; // banded option
+
+    bool hybridCpuGpu; // enable runtime hybrid CPU/GPU scheduling
+    double cpuSpeed;   // relative CPU throughput weight
+    double gpuSpeed;   // relative GPU throughput weight
   };
 
   /**

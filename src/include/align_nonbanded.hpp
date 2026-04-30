@@ -17,7 +17,7 @@
 #include "utils.hpp"
 #include <queue>
 
-namespace dga
+namespace hdga
 {
     /**
      * @brief  vectorized banded alignment in reverse phase
@@ -83,14 +83,14 @@ namespace dga
                 for (size_t readno = 0; readno < readSet.size(); readno++)
                 {
                     std::string read_reverse(readSet[readno]);
-                    dga::seqUtils::reverse(readSet[readno], read_reverse);
+                    hdga::seqUtils::reverse(readSet[readno], read_reverse);
                     readSet_traceback.push_back(read_reverse);
                 }
                 traceback_nonbanded(readSet_traceback, bestScoreVector);
             }
         }
 
-    private:
+    public:
         /**
          * @brief     precompute which vertices are connected with long edge hops
          *            i.e. longer than 'blockWidth'
@@ -116,7 +116,7 @@ namespace dga
 
 #ifdef DEBUG
             auto trueCount = std::count(withLongHop.begin(), withLongHop.end(), true);
-            std::cout << "INFO, dga::Phase1_Rev_Vectorized_Banded::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
+            std::cout << "INFO, hdga::Phase1_Rev_Vectorized_Banded::computeLongHops, fraction of hops that are long: " << trueCount * 1.0 / graph.numVertices << "\n";
 #endif
         }
 
@@ -197,7 +197,7 @@ namespace dga
 
                             // match/mismatch score
                             int32_t matchScore = readChar == graphChar ? parameters.match : -1 * parameters.mismatch;
-                            currentMax = dga_max(currentMax, matchScore); // local alignment can also start with a match at this char
+                            currentMax = hdga_max(currentMax, matchScore); // local alignment can also start with a match at this char
 
                             // match & delete score
                             for (auto k = graphLocal.offsets_out[i]; k < graphLocal.offsets_out[i + 1]; k++)
@@ -213,15 +213,15 @@ namespace dga
                                     prow = &dp_buffer[m % MAX_PREV_ROWS];
 
                                 // delete score
-                                currentMax = dga_max(currentMax, prow->values[j] - parameters.del);
+                                currentMax = hdga_max(currentMax, prow->values[j] - parameters.del);
 
                                 // match score
-                                currentMax = dga_max(currentMax, prow->values[j - 1] + matchScore);
+                                currentMax = hdga_max(currentMax, prow->values[j - 1] + matchScore);
                             }
 
                             // insert score
                             if (j > 0)
-                                currentMax = dga_max(currentMax, current_row->values[j - 1] - parameters.ins);
+                                currentMax = hdga_max(currentMax, current_row->values[j - 1] - parameters.ins);
 
                             current_row->values[j] = currentMax;
 
@@ -305,7 +305,7 @@ namespace dga
                     // Note: to optimize storge, we only store vertical difference; absolute values of
                     //       which is bounded by gap penalty
 #ifdef DEBUG
-                    std::cout << "INFO, dga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", memory requested= " << reducedWidth * reducedHeight << " bytes" << std::endl;
+                    std::cout << "INFO, hdga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", memory requested= " << reducedWidth * reducedHeight << " bytes" << std::endl;
 #endif
 
                     std::vector<std::vector<int8_t>> completeMatrixLog(reducedHeight, std::vector<int8_t>(reducedWidth, 0));
@@ -342,13 +342,13 @@ namespace dga
                                     // ignore edges outside the range
                                     if (graph.adjcny_in[k] >= j0)
                                     {
-                                        fromMatch = dga_max(fromMatch, matrix[(i - 1) & 1][graph.adjcny_in[k] - j0] + matchScore);
-                                        fromDeletion = dga_max(fromDeletion, matrix[i & 1][graph.adjcny_in[k] - j0] - parameters.del);
+                                        fromMatch = hdga_max(fromMatch, matrix[(i - 1) & 1][graph.adjcny_in[k] - j0] + matchScore);
+                                        fromDeletion = hdga_max(fromDeletion, matrix[i & 1][graph.adjcny_in[k] - j0] - parameters.del);
                                     }
                                 }
 
                                 // evaluate current score
-                                matrix[i & 1][j] = dga_max(dga_max(fromInsertion, fromMatch), dga_max(fromDeletion, 0));
+                                matrix[i & 1][j] = hdga_max(hdga_max(fromInsertion, fromMatch), hdga_max(fromDeletion, 0));
 
                                 // save vertical difference of scores, used later for backtracking
                                 completeMatrixLog[i][j] = matrix[i & 1][j] - matrix[(i - 1) & 1][j];
@@ -475,10 +475,10 @@ namespace dga
                         std::reverse(cigar.begin(), cigar.end());
 
                         // shorten the cigar string
-                        dga::seqUtils::cigarCompact(cigar);
+                        hdga::seqUtils::cigarCompact(cigar);
 
                         // validate if cigar yields best score
-                        assert(dga::seqUtils::cigarScore(cigar, parameters) == bestScoreVector[readno].score);
+                        assert(hdga::seqUtils::cigarScore(cigar, parameters) == bestScoreVector[readno].score);
 
                         bestScoreVector[readno].cigar = cigar;
 
@@ -487,9 +487,9 @@ namespace dga
                     }
 
 #ifdef DEBUG
-                    std::cout << "INFO, dga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
-                    std::cout << "INFO, dga::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
-                    std::cout << "TIMER, dga::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 * 1.0 / ASSUMED_CPU_FREQ << ", phase 2.2 = " << time_p2_2 * 1.0 / ASSUMED_CPU_FREQ << "\n";
+                    std::cout << "INFO, hdga::alignToDAGLocal_Phase2, aligning read #" << readno + 1 << ", len = " << readLength << ", score " << bestScoreVector[readno].score << ", strand " << bestScoreVector[readno].strand << "\n";
+                    std::cout << "INFO, hdga::alignToDAGLocal_Phase2, cigar: " << bestScoreVector[readno].cigar << "\n";
+                    std::cout << "TIMER, hdga::alignToDAGLocal_Phase2, CPU cycles spent in :  phase 2.1 = " << time_p2_1 * 1.0 / ASSUMED_CPU_FREQ << ", phase 2.2 = " << time_p2_2 * 1.0 / ASSUMED_CPU_FREQ << "\n";
                     // std::cout.flush();
 #endif
                 }
@@ -497,5 +497,5 @@ namespace dga
         }
     };
 
-} // namespace dga
+} // namespace hdga
 #endif
