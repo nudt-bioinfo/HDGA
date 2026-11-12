@@ -1,4 +1,7 @@
 #!/bin/bash
+set -euo pipefail
+
+cd -- "$(dirname -- "$0")"
 
 # Select build type
 echo "Select build type:"
@@ -23,45 +26,29 @@ case $choice in
         ;;
 esac
 
-# Protobuf path handling
-protobuf_option=""
-if [ -z "${PROTOBUF_DIR}" ]; then
-    read -e -p "Enter Protobuf install prefix (leave empty to use system default): " protobuf_dir_input
-    if [ -n "${protobuf_dir_input}" ]; then
-        protobuf_option="-DPROTOBUF_DIR=${protobuf_dir_input}"
+# Keep option values intact when installation paths contain spaces.
+cmake_options=()
+protobuf_dir=${PROTOBUF_DIR:-}
+if [[ -z "$protobuf_dir" ]]; then
+    read -e -r -p "Enter Protobuf install prefix (leave empty to use system default): " protobuf_dir || true
+fi
+if [[ -n "$protobuf_dir" ]]; then
+    cmake_options+=("-DPROTOBUF_DIR=$protobuf_dir")
+fi
+
+build_dir="build_$build_type"
+if [[ "$build_type" == cpu ]]; then
+    cmake_options+=(-DUSE_GPU_PHASE1=OFF -DUSE_GPU_PHASE2=OFF)
+else
+    cmake_options+=(-DUSE_GPU_PHASE1=ON -DUSE_GPU_PHASE2=ON)
+    if [[ -n "${CUDAARCHS:-}" ]]; then
+        cmake_options+=("-DCMAKE_CUDA_ARCHITECTURES=$CUDAARCHS")
     fi
-else
-    protobuf_option="-DPROTOBUF_DIR=${PROTOBUF_DIR}"
 fi
 
-# Build options
-if [ "$build_type" = "gpu" ]; then
-    echo "Building GPU version..."
-    build_dir="build_gpu"
-    gpu_option="-DUSE_GPU_PHASE1=ON -DUSE_GPU_PHASE2=ON"
-elif [ "$build_type" = "hybrid" ]; then
-    echo "Building hybrid (CPU+GPU) version..."
-    build_dir="build_hybrid"
-    gpu_option="-DUSE_GPU_PHASE1=ON -DUSE_GPU_PHASE2=ON"
-else
-    echo "Building CPU version..."
-    build_dir="build_cpu"
-    gpu_option=""
-fi
-
-# Create build directory
-if [ ! -d "$build_dir" ]; then
-    mkdir "$build_dir"
-fi
-
-# Run cmake and make
-cd "$build_dir" || exit
-
-cmake .. $gpu_option $protobuf_option
-make -j$(nproc)
-
-# Return to parent directory
-cd ..
+echo "Building $build_type version..."
+cmake -S . -B "$build_dir" "${cmake_options[@]}"
+cmake --build "$build_dir" --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc)}"
 
 echo "------------------------------------------------"
-echo "Build finished: $build_dir"
+echo "Build finished: $build_dir/HDGA"

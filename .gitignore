@@ -40,6 +40,9 @@ install_manifest.txt
 
 # build folder
 build/
+/build_cpu/
+/build_gpu/
+/build_hybrid/
 
 ### vim ###
 [._]*.s[a-w][a-z]

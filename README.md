@@ -28,23 +28,28 @@ HDGA is optimized for the `AVX2` instruction set. Please ensure your CPU support
 
 ### Software Requirements
 
-- **Operating System**: Ubuntu 20.04 LTS
-- **CUDA Toolkit**: 12.2
-- **NVIDIA Driver**: 535.183.01
+- **Operating System**: Linux (Ubuntu 22.04 LTS verified for the Quickstart)
+- **CUDA Toolkit**: required for GPU and Hybrid only (12.2 used in the paper)
+- **NVIDIA Driver**: compatible with your CUDA Toolkit (GPU and Hybrid only)
 - **Compiler**:
   - Intel oneAPI DPC++/C++ Compiler (recommended)
   - or GCC with C++17 support (AVX2 enabled)
-- **CMake**: ≥ 3.1
+- **CMake**: ≥ 3.18
 
 ---
 
 ### Required Libraries and Tools
 
-- System development packages:
-  - `zlib1g-dev`
-  - `libbz2-dev`
-  - `liblzma-dev`
-- [Google Protobuf](https://github.com/protocolbuffers/protobuf) (can also be installed via conda)
+On Ubuntu, install the build dependencies with:
+
+```sh
+sudo apt-get update
+sudo apt-get install git cmake build-essential zlib1g-dev libbz2-dev liblzma-dev libprotobuf-dev protobuf-compiler
+```
+
+The build compiles the bundled HTSlib source automatically. If Protobuf is
+installed in a custom location, supply its installation prefix when prompted
+or set `PROTOBUF_DIR` before running the build script.
 
 ---
 
@@ -69,7 +74,22 @@ HDGA provides an interactive build script to compile different execution modes, 
 - **GPU version** (CUDA required)
 - **Hybrid version** (CPU–GPU collaborative, recommended)
 
-The script will automatically configure and compile the selected components.
+For the CPU Quickstart below, choose **1 (CPU)**. No GPU or CUDA Toolkit is
+needed for this mode.
+
+For GPU and Hybrid builds, CMake uses `nvidia-smi` to detect the compute
+capabilities of the GPUs on the build machine. Use a CUDA Toolkit that supports
+the detected architectures. If you build on a login node without a GPU or for
+a different machine, specify the target architecture(s) explicitly:
+
+```sh
+CUDAARCHS=86 ./build.sh          # Example: RTX A6000 (compute capability 8.6)
+CUDAARCHS='75;86' ./build.sh     # Example: one build for 7.5 and 8.6
+```
+
+You can also pass `-DCMAKE_CUDA_ARCHITECTURES=86` when invoking CMake directly.
+Use a fresh build directory when switching back from a cached override to
+automatic detection.
 
 ### Run
 
@@ -93,7 +113,10 @@ The script supports interactive configuration of the following options:
   - Enable/disable adaptive banded mode
 
 ## Quickstart
-The following example demonstrates how to run HDGA using the provided script and built-in datasets:
+The following example runs the bundled dataset in CPU mode. It produces
+1,024 alignment records in `build_cpu/outputfile`. A relative output path
+is interpreted from the selected build directory; use an absolute path to
+write elsewhere.
 ```sh
 ./run.sh
 ========================================

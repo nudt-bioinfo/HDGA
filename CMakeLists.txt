@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.18)
 include(CheckCXXCompilerFlag)
 
 # project settings
@@ -9,9 +9,49 @@ OPTION(USE_GPU_PHASE1 "Use GPU implementation for Phase1 alignment" OFF)
 OPTION(USE_GPU_PHASE2 "Use GPU implementation for Phase2 alignment" OFF)
 
 IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
+  # Honor an explicit build target when compiling for a different machine.
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES AND "$ENV{CUDAARCHS}" STREQUAL "")
+    find_program(HDGA_NVIDIA_SMI nvidia-smi)
+    if(HDGA_NVIDIA_SMI)
+      execute_process(
+        COMMAND "${HDGA_NVIDIA_SMI}" --query-gpu=compute_cap --format=csv,noheader
+        RESULT_VARIABLE cuda_query_status
+        OUTPUT_VARIABLE cuda_compute_caps
+        ERROR_QUIET
+      )
+      if(cuda_query_status STREQUAL "0")
+        string(REGEX MATCHALL "[0-9]+[.][0-9]+" cuda_compute_caps "${cuda_compute_caps}")
+        string(REPLACE "." "" cuda_architectures "${cuda_compute_caps}")
+        if(cuda_architectures)
+          list(REMOVE_DUPLICATES cuda_architectures)
+          set(CMAKE_CUDA_ARCHITECTURES "${cuda_architectures}")
+        endif()
+      endif()
+    endif()
+    if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES)
+      message(FATAL_ERROR
+        "Could not detect a CUDA GPU using nvidia-smi. For GPU or Hybrid builds, "
+        "set CUDAARCHS (e.g. CUDAARCHS=86 ./build.sh) to match the target GPU, "
+        "or choose the CPU build.")
+    endif()
+  endif()
+
+  if(NOT CMAKE_CUDA_COMPILER AND "$ENV{CUDACXX}" STREQUAL "")
+    find_program(HDGA_NVCC NAMES nvcc
+      HINTS "${CUDAToolkit_ROOT}/bin" "$ENV{CUDAToolkit_ROOT}/bin"
+      PATHS "/usr/local/cuda/bin")
+    if(NOT HDGA_NVCC)
+      message(FATAL_ERROR
+        "Could not find nvcc. Install the CUDA Toolkit, add nvcc to PATH, "
+        "or set CUDACXX to the full path to nvcc.")
+    endif()
+    set(CMAKE_CUDA_COMPILER "${HDGA_NVCC}")
+  endif()
+
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   message(STATUS "CUDA enabled, version: ${CUDAToolkit_VERSION}")
+  message(STATUS "CUDA architectures: ${CMAKE_CUDA_ARCHITECTURES}")
 ENDIF()
 
 ##### General Compilation Settings
@@ -21,7 +61,6 @@ set(CMAKE_CXX_STANDARD 14)
 # ========== 添加 CUDA 编译设置 ==========
 IF(USE_GPU_PHASE1 OR USE_GPU_PHASE2)
   set(CMAKE_CUDA_STANDARD 14)
-  set(CMAKE_CUDA_ARCHITECTURES 86) # 适配显卡架构，可根据实际修改
   # 移除 -v 选项以隐藏 ptxas 详细信息
   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -O3 -Xptxas -O3")
   # 添加 CUDA 头文件路径，使普通 C++ 文件也能找到 cuda_runtime.h
@@ -146,11 +185,25 @@ endif()
 
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
-### Include and compile htslib
-include_directories("${PROJECT_SOURCE_DIR}/ext/htslib")
-# Advice: in case htslib is missing some core libraries, install them
-add_custom_target(LIBHTS COMMAND make WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/ext/htslib" COMMENT "Compiling htslib")
-set(HTS_LIBRARY "${PROJECT_SOURCE_DIR}/ext/htslib/libhts.so")
+### Build the pinned HTSlib source in this build tree.
+set(HTSLIB_SOURCE_NAME htslib-6e6cdfc1e0d8f34b6225f64cf27139075c12021e)
+set(HTSLIB_SOURCE_DIR "${PROJECT_BINARY_DIR}/_deps/${HTSLIB_SOURCE_NAME}")
+if(NOT EXISTS "${HTSLIB_SOURCE_DIR}/Makefile")
+  file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/_deps")
+  file(ARCHIVE_EXTRACT
+    INPUT "${PROJECT_SOURCE_DIR}/ext/${HTSLIB_SOURCE_NAME}.zip"
+    DESTINATION "${PROJECT_BINARY_DIR}/_deps")
+endif()
+
+find_program(HTSLIB_MAKE NAMES gmake make REQUIRED)
+include_directories("${HTSLIB_SOURCE_DIR}")
+set(HTS_LIBRARY "${HTSLIB_SOURCE_DIR}/libhts.so")
+add_custom_target(LIBHTS
+  COMMAND "${HTSLIB_MAKE}" libhts.so
+  WORKING_DIRECTORY "${HTSLIB_SOURCE_DIR}"
+  BYPRODUCTS "${HTS_LIBRARY}"
+  COMMENT "Compiling bundled HTSlib"
+  VERBATIM)
 
 ### Include libvgio
 PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS "${PROJECT_SOURCE_DIR}/ext/libvgio/deps/vg.proto")
